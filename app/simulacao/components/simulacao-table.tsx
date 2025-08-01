@@ -2,7 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trash2, Search, PlusCircle, Eye } from "lucide-react"
+import { Trash2, Search, PlusCircle, Eye, RefreshCw, DollarSign } from "lucide-react"
 import type { SimulacaoItem } from "../hooks/useSimulacoes"
 
 interface SimulacaoTableProps {
@@ -12,6 +12,8 @@ interface SimulacaoTableProps {
   onDuplicate: (id: number) => void
   onDelete: (simulacao: SimulacaoItem) => void
   onViewSimulation: (id: number) => void
+  onRefazer: (id: number) => void
+  onAjustarPreco: (id: number) => void
   onNovaSimulacao: () => void
   onClearFilters: () => void
   hasFilters: boolean
@@ -24,6 +26,8 @@ export function SimulacaoTable({
   onDuplicate,
   onDelete,
   onViewSimulation,
+  onRefazer,
+  onAjustarPreco,
   onNovaSimulacao,
   onClearFilters,
   hasFilters,
@@ -142,6 +146,24 @@ export function SimulacaoTable({
                         title="Ver Simulação"
                       >
                         <Eye className="h-4 w-4 text-blue-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 p-0 rounded-full focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none hover:bg-green-50"
+                        onClick={() => onRefazer(simulacao.id)}
+                        title="Refazer Simulação"
+                      >
+                        <RefreshCw className="h-4 w-4 text-green-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 p-0 rounded-full focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none hover:bg-yellow-50"
+                        onClick={() => onAjustarPreco(simulacao.id)}
+                        title="Ajustar Preço"
+                      >
+                        <DollarSign className="h-4 w-4 text-yellow-600" />
                       </Button>
                       <Button
                         variant="ghost"

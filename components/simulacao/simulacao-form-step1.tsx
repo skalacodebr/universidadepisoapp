@@ -247,7 +247,7 @@ export default function SimulacaoFormStep1({ setStep, setSimulacaoData, simulaca
           </SelectTrigger>
           <SelectContent>
             {loadingOptions ? (
-              <SelectItem value="" disabled>
+              <SelectItem value="loading" disabled>
                 Carregando...
               </SelectItem>
             ) : equipesAcabamento.length > 0 ? (
@@ -257,7 +257,7 @@ export default function SimulacaoFormStep1({ setStep, setSimulacaoData, simulaca
                 </SelectItem>
               ))
             ) : (
-              <SelectItem value="" disabled>
+              <SelectItem value="no-data" disabled>
                 Nenhuma equipe encontrada
               </SelectItem>
             )}

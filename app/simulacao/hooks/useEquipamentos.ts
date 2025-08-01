@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { supabase } from "@/lib/supabase"
+import { getSupabaseClient } from "@/lib/supabase"
 
 export interface Equipamento {
   id: number
@@ -25,6 +25,8 @@ export function useEquipamentos() {
     try {
       setLoading(true)
       console.log("Buscando equipamentos (padrão + do usuário)...")
+
+      const supabase = getSupabaseClient()
 
       // Buscar equipamentos padrão (user_id = 0) e do usuário logado
       const { data: equipamentosData, error: equipamentosError } = await supabase

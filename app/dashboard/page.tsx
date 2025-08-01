@@ -5,8 +5,6 @@ import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BarChart } from "@/components/dashboard/bar-chart"
 import { useRouter } from "next/navigation"
-import { Header } from "@/components/layout/header"
-import { Sidebar } from "@/components/layout/sidebar"
 import { useState, useEffect } from "react"
 
 // Mock data for different filter combinations
@@ -160,17 +158,8 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        <Header />
-
-        {/* Dashboard Content */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            <h1 className="text-2xl font-semibold text-gray-800 mb-6">Dashboard</h1>
+    <div>
+      <h1 className="text-2xl font-semibold text-gray-800 mb-6">Dashboard</h1>
 
             {/* Filters */}
             <div className="grid grid-cols-4 gap-4 mb-6">
@@ -303,9 +292,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </Card>
-          </div>
-        </main>
-      </div>
     </div>
   )
 }

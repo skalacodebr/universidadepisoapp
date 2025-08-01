@@ -13,7 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Save, ArrowLeft, TestTube } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { useAuth } from "@/contexts/auth-context"
-import type { SimulacaoFormData } from '@/lib/simulacao-calculator.tsx'
 
 interface NovaSimulacaoFormProps {
   onSubmit: (data: SimulacaoFormData) => void
@@ -41,13 +40,72 @@ interface EquipePreparacao {
 interface Equipamento {
   id: number
   nome: string
+  valor_dia: number
+  user_id: string
 }
 
 interface EquipamentoSelecionado {
   id: number
   nome: string
+  valor_dia: number
   quantidade: number
   selecionado: boolean
+}
+
+interface TipoReforcoEstrutural {
+  id: number
+  nome: string
+}
+
+interface TipoAcabamento {
+  id: number
+  nome: string
+  area500: number
+  area1000: number
+  area1500: number
+  area2000mais: number
+}
+
+interface SimulacaoFormData {
+  nomeObra: string
+  construtora: string
+  endereco: string
+  nomeContato: string
+  telefoneContato: string
+  reforcoEstrutural: string
+  areaTotal: string
+  areaPorDia: string
+  previsaoInicio: Date | null
+  tipoAcabamento: string
+  espessura: string
+  distanciaObra: string
+  lancamentoConcreto: string
+  prazoObra: string
+  inicioHora: string
+  equipePreparacao: string
+  prazoPreparacao: string
+  equipeConcretagem: string
+  prazoConcretagem: string
+  equipeAcabamento: string
+  prazoAcabamento: string
+  prazoFinalizacao: string
+  equipamentosSelecionados: Array<{
+    id: number
+    nome: string
+    valor_dia: number
+    quantidade: number
+    selecionado: boolean
+  }>
+  frete: string
+  hospedagem: string
+  locacaoEquipamento: string
+  locacaoVeiculo: string
+  material: string
+  passagem: string
+  extra: string
+  comissao: string
+  precoVenda: string
+  lucroDesejado: string
 }
 
 export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps) {
@@ -67,7 +125,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     distanciaObra: "",
     lancamentoConcreto: "",
     prazoObra: "",
-    inicioHora: "",
+    inicioHora: "08:00",
     equipePreparacao: "",
     prazoPreparacao: "",
     equipeConcretagem: "",
@@ -83,7 +141,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     material: "",
     passagem: "",
     extra: "",
-    comissao: "",
+    comissao: "0",
     precoVenda: "",
     lucroDesejado: "",
   })  
@@ -94,9 +152,14 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
   const [equipesConcretagem, setEquipesConcretagem] = useState<EquipeConcretagem[]>([])
   const [equipesAcabamento, setEquipesAcabamento] = useState<EquipeAcabamento[]>([])
   const [equipesPreparacao, setEquipesPreparacao] = useState<EquipePreparacao[]>([])
+  const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
   const [loadingEquipes, setLoadingEquipes] = useState(true)
   const [loadingEquipamentos, setLoadingEquipamentos] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [tiposReforcoEstrutural, setTiposReforcoEstrutural] = useState<TipoReforcoEstrutural[]>([])
+  const [loadingTiposReforco, setLoadingTiposReforco] = useState(true)
+  const [tiposAcabamento, setTiposAcabamento] = useState<TipoAcabamento[]>([])
+  const [loadingTiposAcabamento, setLoadingTiposAcabamento] = useState(true)
 
   // Buscar equipes do banco de dados
   useEffect(() => {
@@ -173,25 +236,28 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
       try {
         setLoadingEquipamentos(true)
 
-        // Verificar se o usuário está autenticado antes de fazer as queries
         if (!isAuthenticated || !user) {
+          console.log("DEBUG - Auth:", { isAuthenticated, userId: user?.id })
           console.log("Usuário não autenticado, pulando query de equipamentos")
           setLoadingEquipamentos(false)
           return
         }
 
+        console.log("DEBUG - Auth:", { isAuthenticated, userId: user?.id })
         console.log("Buscando equipamentos...")
 
         // Buscar equipamentos (padrão + do usuário)
         const { data: equipamentosData, error: equipamentosError } = await supabase
           .from("equipamentos")
-          .select("id, nome, user_id")
-          .or(`user_id.eq.0,user_id.eq.${user.id}`)
+          .select("id, nome, valor_dia, user_id")
+          .in('user_id', ['0', user.id])
           .order("nome")
 
         if (equipamentosError) {
-          console.error("Erro ao buscar equipamentos:", equipamentosError)
+          console.error("Erro ao buscar equipamentos:", equipamentosError.message)
+          console.error("Detalhes do erro:", equipamentosError)
         } else {
+          console.log("DEBUG - Resposta:", equipamentosData)
           console.log("Equipamentos encontrados:", equipamentosData?.length)
           setEquipamentos(equipamentosData || [])
 
@@ -199,6 +265,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
           const equipamentosIniciais: EquipamentoSelecionado[] = (equipamentosData || []).map((eq) => ({
             id: eq.id,
             nome: eq.nome,
+            valor_dia: eq.valor_dia,
             quantidade: 1,
             selecionado: false,
           }))
@@ -206,7 +273,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
           setFormData(prev => ({ 
             ...prev,
             equipamentosSelecionados: equipamentosIniciais
-            })) 
+          }))
         }
       } catch (error) {
         console.error("Erro geral ao buscar equipamentos:", error)
@@ -218,6 +285,72 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     fetchEquipamentos()
   }, [isAuthenticated, user])
 
+  // Buscar tipos de reforço estrutural
+  useEffect(() => {
+    const fetchTiposReforco = async () => {
+      try {
+        setLoadingTiposReforco(true)
+
+        if (!isAuthenticated || !user) {
+          console.log("Usuário não autenticado, pulando query de tipos de reforço")
+          setLoadingTiposReforco(false)
+          return
+        }
+
+        const { data: tiposReforcoData, error: tiposReforcoError } = await supabase
+          .from("tipo_reforco_estrutural")
+          .select("id, nome")
+          .order("id")
+
+        if (tiposReforcoError) {
+          console.error("Erro ao buscar tipos de reforço estrutural:", tiposReforcoError)
+        } else {
+          console.log("Tipos de reforço estrutural encontrados:", tiposReforcoData?.length)
+          setTiposReforcoEstrutural(tiposReforcoData || [])
+        }
+      } catch (error) {
+        console.error("Erro geral ao buscar tipos de reforço estrutural:", error)
+      } finally {
+        setLoadingTiposReforco(false)
+      }
+    }
+
+    fetchTiposReforco()
+  }, [isAuthenticated, user])
+
+  // Buscar tipos de acabamento
+  useEffect(() => {
+    const fetchTiposAcabamento = async () => {
+      try {
+        setLoadingTiposAcabamento(true)
+
+        if (!isAuthenticated || !user) {
+          console.log("Usuário não autenticado, pulando query de tipos de acabamento")
+          setLoadingTiposAcabamento(false)
+          return
+        }
+
+        const { data: tiposAcabamentoData, error: tiposAcabamentoError } = await supabase
+          .from("tipo_acabamento")
+          .select("id, nome, area500, area1000, area1500, area2000mais")
+          .order("id")
+
+        if (tiposAcabamentoError) {
+          console.error("Erro ao buscar tipos de acabamento:", tiposAcabamentoError)
+        } else {
+          console.log("Tipos de acabamento encontrados:", tiposAcabamentoData?.length)
+          setTiposAcabamento(tiposAcabamentoData || [])
+        }
+      } catch (error) {
+        console.error("Erro geral ao buscar tipos de acabamento:", error)
+      } finally {
+        setLoadingTiposAcabamento(false)
+      }
+    }
+
+    fetchTiposAcabamento()
+  }, [isAuthenticated, user])
+
   const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
@@ -225,7 +358,9 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
   const handleEquipamentoChange = (equipamentoId: number, checked: boolean) => {
     setFormData((prev) => ({
       ...prev,
-      equipamentosSelecionados: prev.equipamentosSelecionados.map((eq) => (eq.id === equipamentoId ? { ...eq, selecionado: checked } : eq)),
+      equipamentosSelecionados: prev.equipamentosSelecionados.map((eq) => 
+        eq.id === equipamentoId ? { ...eq, selecionado: checked } : eq
+      ),
     }))
   }
 
@@ -233,7 +368,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     setFormData((prev) => ({
       ...prev,
       equipamentosSelecionados: prev.equipamentosSelecionados.map((eq) =>
-        eq.id === equipamentoId ? { ...eq, quantidade: Math.max(1, quantidade) } : eq,
+        eq.id === equipamentoId ? { ...eq, quantidade: Math.max(1, quantidade) } : eq
       ),
     }))
   }
@@ -247,7 +382,8 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     const equipamentosComTeste = formData.equipamentosSelecionados.map((eq, index) => ({
       ...eq,
       selecionado: index < 3, // Seleciona os primeiros 3 equipamentos
-      quantidade: Math.floor(Math.random() * 3) + 1, // Quantidade entre 1 e 3
+      quantidade: Math.floor(Math.random() * 3) + 1, // Quantidade entre 1 e 3,
+      valor_dia: eq.valor_dia // Mantém o valor_dia original
     }))
 
     setFormData({
@@ -256,14 +392,15 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
       endereco: "Rua das Flores, 123 - Centro - São Paulo/SP",
       nomeContato: "João Silva",
       telefoneContato: "(11) 99999-9999",
-      reforcoEstrutural: "sim",
+      reforcoEstrutural: tiposReforcoEstrutural.length > 0 ? String(tiposReforcoEstrutural[0].id) : "",
       areaTotal: "1500",
       areaPorDia: "200",
       previsaoInicio: amanha,
-      tipoAcabamento: "premium",
+      tipoAcabamento: tiposAcabamento.length > 0 ? String(tiposAcabamento[0].id) : "",
       espessura: "15",
       distanciaObra: "25",
-      lancamentoConcreto: "bomba",
+      lancamentoConcreto: "75",
+      prazoObra: "8",
       inicioHora: "07:00",
       equipePreparacao: equipesConcretagem.length > 0 ? String(equipesConcretagem[0].id) : "",
       prazoPreparacao: "3",
@@ -330,6 +467,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 id="nomeObra"
                 value={formData.nomeObra}
                 onChange={(e) => handleChange("nomeObra", e.target.value)}
+                placeholder="Nome da obra"
                 required
               />
             </div>
@@ -339,6 +477,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 id="construtora"
                 value={formData.construtora}
                 onChange={(e) => handleChange("construtora", e.target.value)}
+                placeholder="Nome da construtora"
               />
             </div>
             <div className="space-y-2">
@@ -347,6 +486,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 id="endereco"
                 value={formData.endereco}
                 onChange={(e) => handleChange("endereco", e.target.value)}
+                placeholder="Endereço da obra"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -356,6 +496,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                   id="nomeContato"
                   value={formData.nomeContato}
                   onChange={(e) => handleChange("nomeContato", e.target.value)}
+                  placeholder="Nome do contato responsável"
                 />
               </div>
               <div className="space-y-2">
@@ -364,22 +505,36 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                   id="telefoneContato"
                   value={formData.telefoneContato}
                   onChange={(e) => handleChange("telefoneContato", e.target.value)}
-                  mask="telefone"
+                  placeholder="(00) 00000-0000"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="reforcoEstrutural">Reforço Estrutural</Label>
+              <Label htmlFor="reforcoEstrutural">Reforço Estrutural *</Label>
               <Select
                 value={formData.reforcoEstrutural}
                 onValueChange={(value) => handleChange("reforcoEstrutural", value)}
+                required
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="sim">Sim</SelectItem>
-                  <SelectItem value="nao">Não</SelectItem>
+                  {loadingTiposReforco ? (
+                    <SelectItem value="loading" disabled>
+                      Carregando tipos de reforço...
+                    </SelectItem>
+                  ) : tiposReforcoEstrutural.length > 0 ? (
+                    tiposReforcoEstrutural.map((tipo) => (
+                      <SelectItem key={tipo.id} value={String(tipo.id)}>
+                        {tipo.nome}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      Nenhum tipo de reforço encontrado
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -390,6 +545,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.areaTotal}
                 onChange={(e) => handleChange("areaTotal", e.target.value)}
+                placeholder="Área total em m²"
                 required
               />
             </div>
@@ -400,6 +556,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.areaPorDia}
                 onChange={(e) => handleChange("areaPorDia", e.target.value)}
+                placeholder="Área executada por dia"
                 required
               />
             </div>
@@ -427,9 +584,21 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="padrao">Padrão</SelectItem>
-                  <SelectItem value="premium">Premium</SelectItem>
-                  <SelectItem value="especial">Especial</SelectItem>
+                  {loadingTiposAcabamento ? (
+                    <SelectItem value="loading" disabled>
+                      Carregando tipos de acabamento...
+                    </SelectItem>
+                  ) : tiposAcabamento.length > 0 ? (
+                    tiposAcabamento.map((tipo) => (
+                      <SelectItem key={tipo.id} value={String(tipo.id)}>
+                        {tipo.nome}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      Nenhum tipo de acabamento encontrado
+                    </SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -440,6 +609,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.espessura}
                 onChange={(e) => handleChange("espessura", e.target.value)}
+                placeholder="Espessura em centímetros"
                 required
               />
             </div>
@@ -450,25 +620,20 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.distanciaObra}
                 onChange={(e) => handleChange("distanciaObra", e.target.value)}
+                placeholder="Distância em quilômetros"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lancamentoConcreto">Lançamento do concreto *</Label>
-              <Select
+              <Label htmlFor="lancamentoConcreto">Lançamento do concreto (m³) *</Label>
+              <Input
+                id="lancamentoConcreto"
+                type="number"
                 value={formData.lancamentoConcreto}
-                onValueChange={(value) => handleChange("lancamentoConcreto", value)}
+                onChange={(e) => handleChange("lancamentoConcreto", e.target.value)}
+                placeholder="Volume em metros cúbicos"
                 required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bomba">Bomba</SelectItem>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="outro">Outro</SelectItem>
-                </SelectContent>
-              </Select>
+              />
             </div>
           </div>
         </TabsContent>
@@ -551,6 +716,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.prazoConcretagem}
                 onChange={(e) => handleChange("prazoConcretagem", e.target.value)}
+                placeholder="Dias para concretagem"
               />
             </div>
             <div className="space-y-2">
@@ -560,6 +726,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.prazoAcabamento}
                 onChange={(e) => handleChange("prazoAcabamento", e.target.value)}
+                placeholder="Dias para acabamento"
               />
             </div>
 
@@ -602,6 +769,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.prazoPreparacao}
                 onChange={(e) => handleChange("prazoPreparacao", e.target.value)}
+                placeholder="Dias para preparação"
               />
             </div>
             <div className="space-y-2">
@@ -611,6 +779,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.prazoFinalizacao}
                 onChange={(e) => handleChange("prazoFinalizacao", e.target.value)}
+                placeholder="Dias para finalização"
               />
             </div>
           </div>
@@ -638,7 +807,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                         onCheckedChange={(checked) => handleEquipamentoChange(equipamento.id, checked as boolean)}
                       />
                       <Label htmlFor={`equipamento-${equipamento.id}`} className="flex-1 cursor-pointer text-sm">
-                        {equipamento.nome}
+                        {equipamento.nome} - R$ {equipamento.valor_dia}/dia
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -667,7 +836,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                       .filter((eq) => eq.selecionado)
                       .map((eq) => (
                         <li key={eq.id}>
-                          • {eq.nome} - Quantidade: {eq.quantidade}
+                          • {eq.nome} - {eq.quantidade} un. x R$ {eq.valor_dia}/dia
                         </li>
                       ))}
                   </ul>
@@ -697,6 +866,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.frete}
                 onChange={(e) => handleChange("frete", e.target.value)}
+                placeholder="Valor do frete"
               />
             </div>
             <div className="space-y-2">
@@ -706,6 +876,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.hospedagem}
                 onChange={(e) => handleChange("hospedagem", e.target.value)}
+                placeholder="Valor da hospedagem"
               />
             </div>
             <div className="space-y-2">
@@ -715,6 +886,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.locacaoEquipamento}
                 onChange={(e) => handleChange("locacaoEquipamento", e.target.value)}
+                placeholder="Valor da locação de equipamento"
               />
             </div>
             <div className="space-y-2">
@@ -724,6 +896,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.locacaoVeiculo}
                 onChange={(e) => handleChange("locacaoVeiculo", e.target.value)}
+                placeholder="Valor da locação de veículo"
               />
             </div>
             <div className="space-y-2">
@@ -733,6 +906,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.material}
                 onChange={(e) => handleChange("material", e.target.value)}
+                placeholder="Valor do material"
               />
             </div>
             <div className="space-y-2">
@@ -742,6 +916,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.passagem}
                 onChange={(e) => handleChange("passagem", e.target.value)}
+                placeholder="Valor da passagem"
               />
             </div>
             <div className="space-y-2">
@@ -751,6 +926,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.extra}
                 onChange={(e) => handleChange("extra", e.target.value)}
+                placeholder="Valor extra"
               />
             </div>
 
@@ -765,15 +941,17 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.comissao}
                 onChange={(e) => handleChange("comissao", e.target.value)}
+                placeholder="Percentual de comissão"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="precoVenda">Preço de venda por m²</Label>
+              <Label htmlFor="precoVenda">Se o preço de venda por M² for:</Label>
               <Input
                 id="precoVenda"
                 type="number"
                 value={formData.precoVenda}
                 onChange={(e) => handleChange("precoVenda", e.target.value)}
+                placeholder="Preço por m²"
               />
             </div>
             <div className="space-y-2">
@@ -783,6 +961,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 type="number"
                 value={formData.lucroDesejado}
                 onChange={(e) => handleChange("lucroDesejado", e.target.value)}
+                placeholder="Percentual de lucro desejado"
               />
             </div>
           </div>

@@ -39,7 +39,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 bg-white border-r flex flex-col h-screen">
+    <aside className="w-64 bg-white border-r flex flex-col fixed top-0 left-0 z-30 h-screen">
       {/* Logo */}
       <div className="p-4 flex justify-center">
         <Image

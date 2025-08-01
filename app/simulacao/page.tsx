@@ -18,6 +18,35 @@ import type { SimulacaoResult as SimulacaoResultType } from "@/lib/simulacao-cal
 import type { SimulacaoItem } from "./hooks/useSimulacoes"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAuth } from "@/contexts/auth-context"
+import { useEffect } from "react"
+
+// Revenue ranges for the select input
+const revenueRanges = [
+  { value: "0-180000", label: "R$ 0,00 - R$ 180.000,00" },
+  { value: "180000.01-360000", label: "R$ 180.000,01 - R$ 360.000,00" },
+  { value: "360000.01-540000", label: "R$ 360.000,01 - R$ 540.000,00" },
+  { value: "540000.01-720000", label: "R$ 540.000,01 - R$ 720.000,00" },
+  { value: "720000.01-900000", label: "R$ 720.000,01 - R$ 900.000,00" },
+  { value: "900000.01-1080000", label: "R$ 900.000,01 - R$ 1.080.000,00" },
+  { value: "1080000.01-1260000", label: "R$ 1.080.000,01 - R$ 1.260.000,00" },
+  { value: "1260000.01-1440000", label: "R$ 1.260.000,01 - R$ 1.440.000,00" },
+  { value: "1440000.01-1620000", label: "R$ 1.440.000,01 - R$ 1.620.000,00" },
+  { value: "1620000.01-1800000", label: "R$ 1.620.000,01 - R$ 1.800.000,00" },
+  { value: "1800000.01-1980000", label: "R$ 1.800.000,01 - R$ 1.980.000,00" },
+  { value: "1980000.01-2160000", label: "R$ 1.980.000,01 - R$ 2.160.000,00" },
+  { value: "2160000.01-2340000", label: "R$ 2.160.000,01 - R$ 2.340.000,00" },
+  { value: "2340000.01-2520000", label: "R$ 2.340.000,01 - R$ 2.520.000,00" },
+  { value: "2520000.01-2700000", label: "R$ 2.520.000,01 - R$ 2.700.000,00" },
+  { value: "2700000.01-2880000", label: "R$ 2.700.000,01 - R$ 2.880.000,00" },
+  { value: "2880000.01-3060000", label: "R$ 2.880.000,01 - R$ 3.060.000,00" },
+  { value: "3060000.01-3240000", label: "R$ 3.060.000,01 - R$ 3.240.000,00" },
+  { value: "3240000.01-3420000", label: "R$ 3.240.000,01 - R$ 3.420.000,00" },
+  { value: "3420000.01-3600000", label: "R$ 3.420.000,01 - R$ 3.600.000,00" },
+]
 
 // Função adaptadora para converter formato antigo para novo formato detalhado
 function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalNome: string = 'N/A'): SimulacaoResultType {
@@ -41,7 +70,7 @@ function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalN
       sobreposicaoCA: obra.sobreposicao_ca || 0,
       concreto: oldResult.volumeConcretoM3 || 0,
       finalConcretagem: obra.final_concretagem || '11:00',
-      preparoDiaSeguinte: 6
+      preparoDiaSeguinte: Math.max(0, 19 - 17) // Calcula baseado no final do acabamento (19h) - 17h
     },
     equipeConcretagemAcabamento: {
       equipeTotal: 8, // 5 concretagem + 3 acabamento
@@ -143,11 +172,29 @@ function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalN
       percentualComissoes: obra.percentual_comissao || 0
     },
     outrosCustos: {
-      totalOutrosCustos: (oldResult.custosFixos?.extra || 0) + (oldResult.custosFixos?.passagem || 0),
-      totalM2: obra.area_total_metros_quadrados ? ((oldResult.custosFixos?.extra || 0) + (oldResult.custosFixos?.passagem || 0)) / obra.area_total_metros_quadrados : 0
+      totalOutrosCustos: (obra.valor_frete || 0) + 
+                        (obra.valor_hospedagem || 0) + 
+                        (obra.valor_locacao_equipamento || 0) + 
+                        (obra.valor_locacao_veiculos || 0) + 
+                        (obra.valor_material || 0) + 
+                        (obra.valor_passagem || 0) + 
+                        (obra.valor_extra || 0),
+      totalM2: obra.area_total_metros_quadrados ? ((obra.valor_frete || 0) + 
+                                                  (obra.valor_hospedagem || 0) + 
+                                                  (obra.valor_locacao_equipamento || 0) + 
+                                                  (obra.valor_locacao_veiculos || 0) + 
+                                                  (obra.valor_material || 0) + 
+                                                  (obra.valor_passagem || 0) + 
+                                                  (obra.valor_extra || 0)) / obra.area_total_metros_quadrados : 0,
+      frete: obra.valor_frete || 0,
+      hospedagem: obra.valor_hospedagem || 0,
+      locacaoEquipamento: obra.valor_locacao_equipamento || 0,
+      locacaoVeiculo: obra.valor_locacao_veiculos || 0,
+      material: obra.valor_material || 0,
+      passagem: obra.valor_passagem || 0,
+      extra: obra.valor_extra || 0
     },
     precoVenda: {
-      precoVenda: oldResult.valorTotal || 0,
       precoVendaPorM2: oldResult.precoVendaM2 || 0,
       sePrecoVendaPorM2For: 25.00,
       valorTotal: oldResult.valorTotal || 0,
@@ -182,6 +229,7 @@ async function getEquipePreparacaoPessoas(equipeId: number | null): Promise<numb
 }
 
 export default function SimulacaoPage() {
+  const { user } = useAuth()
   const { simulacoes, loading, duplicarSimulacao, excluirSimulacao } = useSimulacoes()
 
   const {
@@ -200,10 +248,115 @@ export default function SimulacaoPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [simulacaoParaExcluir, setSimulacaoParaExcluir] = useState<SimulacaoItem | null>(null)
   const [loadingView, setLoadingView] = useState(false)
+  const [selectedRevenueRange, setSelectedRevenueRange] = useState<string>("")
+  const [custoFixoError, setCustoFixoError] = useState<string>("")
+
+  // Load existing revenue data when component mounts
+  useEffect(() => {
+    const loadExistingRevenue = async () => {
+      if (!user?.id) return
+
+      try {
+        const { data, error } = await supabase
+          .from('custofixo_usuario')
+          .select('faturamento_12, total')
+          .eq('userid', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (error) {
+          console.error('Erro ao carregar faturamento existente:', error)
+          setCustoFixoError('Erro ao carregar dados do custo fixo')
+          return
+        }
+
+        if (data && data.length > 0) {
+          if (data[0].faturamento_12) {
+            setSelectedRevenueRange(data[0].faturamento_12)
+          }
+          setCustoFixoError("") // Clear any previous errors
+        } else {
+          setCustoFixoError('Você precisa configurar seus custos fixos antes de usar as simulações. Acesse a página de Custo Fixo.')
+        }
+      } catch (error) {
+        console.error('Erro ao carregar faturamento:', error)
+        setCustoFixoError('Erro ao carregar dados do custo fixo')
+      }
+    }
+
+    loadExistingRevenue()
+  }, [user?.id])
+
+  // Save revenue when selection changes
+  const handleRevenueChange = async (value: string) => {
+    setSelectedRevenueRange(value)
+    
+    if (!user?.id) return
+
+    try {
+      // Check if user already has a record
+      const { data: existingData, error: checkError } = await supabase
+        .from('custofixo_usuario')
+        .select('id')
+        .eq('userid', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (checkError) {
+        console.error('Erro ao verificar registro existente:', checkError)
+        setCustoFixoError('Erro ao verificar dados do custo fixo')
+        return
+      }
+
+      if (existingData && existingData.length > 0) {
+        // Update existing record
+        const { error: updateError } = await supabase
+          .from('custofixo_usuario')
+          .update({ faturamento_12: value })
+          .eq('id', existingData[0].id)
+
+        if (updateError) {
+          console.error('Erro ao atualizar faturamento:', updateError)
+          setCustoFixoError('Erro ao salvar faturamento')
+        } else {
+          setCustoFixoError("") // Clear error on success
+        }
+      } else {
+        // Create new record with only faturamento_12
+        const { error: insertError } = await supabase
+          .from('custofixo_usuario')
+          .insert({
+            userid: user.id,
+            faturamento_12: value,
+            total: 0 // Default value for other required fields
+          })
+
+        if (insertError) {
+          console.error('Erro ao criar registro de faturamento:', insertError)
+          setCustoFixoError('Erro ao salvar faturamento')
+        } else {
+          setCustoFixoError("") // Clear error on success
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao salvar faturamento:', error)
+      setCustoFixoError('Erro ao salvar faturamento')
+    }
+  }
 
   const handleEdit = async (id: number) => {
     // TODO: Implementar edição
     console.log("Editar simulação:", id)
+  }
+
+  const handleRefazer = async (id: number) => {
+    // Redirecionar para nova simulação com dados da simulação existente
+    window.location.href = `/simulacao/nova?refazer=${id}`
+  }
+
+  const handleAjustarPreco = async (id: number) => {
+    console.log("Ajustando preço da simulação", id)
+    window.location.href = `/simulacao/ajustar-preco?id=${id}`
   }
 
   const handleDuplicate = async (id: number) => {
@@ -223,13 +376,13 @@ export default function SimulacaoPage() {
     }
   }
 
-  const handleViewSimulation = async (id: number) => {
+  const handleViewSimulation = async (simulacaoId: number) => {
     try {
+      console.log("Visualizando simulação ID:", simulacaoId)
       setLoadingView(true)
-      console.log("Visualizando simulação ID:", id)
 
       // Buscar os dados da simulação no banco
-      const { data: obra, error } = await supabase.from("obras").select("*").eq("id", id).eq("simulacao", true).single()
+      const { data: obra, error } = await supabase.from("obras").select("*").eq("id", simulacaoId).eq("simulacao", true).single()
 
       if (error) {
         console.error("Erro ao buscar simulação:", error)
@@ -241,239 +394,357 @@ export default function SimulacaoPage() {
         return
       }
 
-      // Buscar o número de pessoas da equipe de preparação
-      const pessoasPreparacao = await getEquipePreparacaoPessoas(obra.equipes_preparacao_id)
-
-      // Buscar o nome do tipo de reforço estrutural se existe ID
-      let tipoReforcoEstruturalNome = 'N/A'
-      if (obra.tipo_reforco_estrutural_id) {
-        const { data: tipoReforco } = await supabase
-          .from("tipo_reforco_estrutural")
-          .select("nome")
-          .eq("id", obra.tipo_reforco_estrutural_id)
-          .single()
-        
-        tipoReforcoEstruturalNome = tipoReforco?.nome || 'N/A'
-      }
-
-      // Buscar veículos da simulação se tem usuário
-      let veiculosDetalhados: any[] = []
-      if (obra.usuarios_id) {
-        try {
-          console.log("Buscando veículos para usuário:", obra.usuarios_id)
-          
-          // Buscar veículos da obra do usuário
-          const { data: veiculosObra, error: errorVeiculos } = await supabase
-            .from('obras_veiculos_simulacao')
-            .select('*')
-            .eq('userid', obra.usuarios_id)
-
-          if (errorVeiculos) {
-            console.error("Erro ao buscar veículos:", errorVeiculos)
-          } else if (veiculosObra && veiculosObra.length > 0) {
-            console.log("Veículos encontrados:", veiculosObra)
-            
-            // Buscar informações detalhadas dos veículos (rs_km)
-            const nomesVeiculos = veiculosObra.map(v => v.veiculo)
-            console.log("🔍 NOMES DOS VEÍCULOS PARA BUSCA:", nomesVeiculos)
-            console.log("🔍 DETALHES DOS VEÍCULOS DA OBRA:", veiculosObra)
-            
-            const { data: veiculosInfo, error: errorVeiculosInfo } = await supabase
-              .from('veiculos')
-              .select('veiculo, rs_km')
-              .in('veiculo', nomesVeiculos)
-
-            if (!errorVeiculosInfo && veiculosInfo) {
-              console.log("✅ INFORMAÇÕES DOS VEÍCULOS ENCONTRADAS:", veiculosInfo)
-              console.log("📊 QUANTIDADE ENCONTRADA:", veiculosInfo.length)
-              
-              // Verificar cada veículo individualmente
-              nomesVeiculos.forEach(nome => {
-                const encontrado = veiculosInfo.find(v => v.veiculo === nome)
-                if (!encontrado) {
-                  console.warn(`❌ VEÍCULO NÃO ENCONTRADO: "${nome}"`)
-                  console.log(`🔍 Comparando com veículos disponíveis:`, veiculosInfo.map(v => `"${v.veiculo}"`))
-                } else {
-                  console.log(`✅ VEÍCULO ENCONTRADO: "${nome}" = R$ ${encontrado.rs_km}/km`)
-                }
-              })
-              
-              // Combinar dados e calcular custos
-              const distanciaObra = obra.distancia_obra || 0
-              const diasObra = obra.prazo_obra || 0
-              
-              veiculosDetalhados = veiculosObra.map(veiculo => {
-                const veiculoInfo = veiculosInfo.find(v => v.veiculo === veiculo.veiculo)
-                const rsKm = veiculoInfo?.rs_km || 0
-                const quantidade = veiculo.quantidade || 1
-                
-                // Calcular custo: distância × 2 (ida e volta) × dias × quantidade × rs_km
-                const custoTotal = distanciaObra * 2 * diasObra * quantidade * rsKm
-                
-                return {
-                  veiculo: veiculo.veiculo,
-                  tipo: veiculo.tipo || 'Não especificado',
-                  quantidade: quantidade,
-                  rs_km: rsKm,
-                  distancia_obra: distanciaObra,
-                  dias_obra: diasObra,
-                  custo_total: custoTotal
-                }
-              })
-              
-              console.log("Veículos com custos calculados:", veiculosDetalhados)
-            } else {
-              console.error("❌ ERRO AO BUSCAR VEÍCULOS:", errorVeiculosInfo)
-            }
-          }
-        } catch (error) {
-          console.error("Erro ao buscar veículos da simulação:", error)
-        }
-      }
-
-      console.log("Dados da obra encontrados:", obra)
-      console.log("Tipo de reforço estrutural:", tipoReforcoEstruturalNome)
-      console.log("Campos específicos da obra:")
-      console.log("- tipo_reforco_estrutural_id:", obra.tipo_reforco_estrutural_id)
-      console.log("- prazo_obra:", obra.prazo_obra)
-      console.log("- area_total_metros_quadrados:", obra.area_total_metros_quadrados)
-      console.log("- area_por_dia:", obra.area_por_dia)
-      console.log("- area_por_hora:", obra.area_por_hora)
-      console.log("- horas_inicio_concretagem:", obra.horas_inicio_concretagem)
-      console.log("- horas_inicio_acabamento:", obra.horas_inicio_acabamento)
-      console.log("- espessura_piso:", obra.espessura_piso)
-      console.log("- dias_concretagem:", obra.dias_concretagem)
-      console.log("- dias_acabamento:", obra.dias_acabamento)
-      console.log("- hora_concretagem:", obra.hora_concretagem)
-      console.log("- hora_acabamento:", obra.hora_acabamento)
-      console.log("- final_concretagem:", obra.final_concretagem)
-      console.log("- final_acabamento:", obra.final_acabamento)
-      console.log("- sobreposicao_ca:", obra.sobreposicao_ca)
-      console.log("- prazo_preparacao_obra:", obra.prazo_preparacao_obra)
-      console.log("- prazo_finalizacao_obra:", obra.prazo_finalizacao_obra)
-
-      // Calcular volume de concreto
-      const volumeConcretoM3 = (obra.area_total_metros_quadrados || 0) * ((obra.espessura_piso || 0) / 100)
-
-      // Usar o prazo_obra diretamente da tabela
-      const diasTotais = obra.prazo_obra || 
-        (obra.dias_concretagem || 0) +
-        (obra.dias_acabamento || 0) +
-        (obra.prazo_preparacao_obra || 0) +
-        (obra.prazo_finalizacao_obra || 0)
-
-      // Usar o custo da mão de obra salvo no banco de dados
-      const custoTotalMaoObraSalvo = obra.custo_mao_obra || 0
+      // Buscar custos fixos do usuário
+      console.log('🔍 Buscando custos fixos para o usuário:', obra.usuarios_id)
+      const { data: custosFixosData, error: custosFixosError } = await supabase
+        .from('custofixo_usuario')
+        .select('*')
+        .eq('userid', obra.usuarios_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
       
-      console.log("Custo da mão de obra do banco de dados:", custoTotalMaoObraSalvo)
+      // Buscar tabela de alíquotas do Simples
+      const { data: simplesData, error: simplesError } = await supabase
+        .from('simples_brackets')
+        .select('*')
+        .order('faturamento_ate', { ascending: true })
 
-      // Calcular custos de equipamentos a partir do JSONB
-      let custoEquipamentos = 0
-      let equipamentosSelecionados = []
-
-      try {
-        let equipamentos = obra.equipamentos_selecionados
-        
-        // Se for uma string, tentar fazer parse
-        if (typeof equipamentos === 'string') {
-          equipamentos = JSON.parse(equipamentos)
-        }
-        
-        // Se for array, usar os dados
-        if (Array.isArray(equipamentos)) {
-          equipamentosSelecionados = equipamentos
-        }
-      } catch (error) {
-        console.error("Erro ao processar equipamentos para cálculo:", error)
-      }
-
-      if (equipamentosSelecionados.length > 0) {
-        custoEquipamentos = equipamentosSelecionados.reduce((total: number, equip: any) => {
-          // Se já tem custo_total salvo, usar ele
-          if (equip.custo_total) {
-            return total + equip.custo_total
-          }
-          // Senão, calcular: valor_dia × quantidade × dias_totais
-          const custoEquip = (equip.valor_dia || 0) * (equip.quantidade || 0) * diasTotais
-          return total + custoEquip
-        }, 0)
-
-        console.log("Equipamentos encontrados:", equipamentosSelecionados)
-        console.log("Custo total dos equipamentos:", custoEquipamentos)
-      }
-
-      console.log("Custos calculados:", {
-        maoObra: `Custo total da mão de obra (salvo no banco): R$${custoTotalMaoObraSalvo}`,
-        equipamentos: custoEquipamentos,
-        veiculos: obra.custo_veiculos || 0
+      console.log('📊 Resposta da busca de custos fixos:', {
+        success: !custosFixosError,
+        error: custosFixosError?.message,
+        recordCount: custosFixosData?.length || 0,
+        firstRecord: custosFixosData?.[0] ? {
+          id: custosFixosData[0].id,
+          userid: custosFixosData[0].userid,
+          total: custosFixosData[0].total,
+          created_at: custosFixosData[0].created_at
+        } : 'Nenhum registro encontrado'
       })
 
-      // Calcular os custos primeiro
-      const custoMateriais = {
-        concreto: volumeConcretoM3 * 350, // Preço estimado do concreto
-        outros: (obra.area_total_metros_quadrados || 0) * 15, // Preço estimado outros materiais
-        total: volumeConcretoM3 * 350 + (obra.area_total_metros_quadrados || 0) * 15 + (obra.valor_material || 0),
+      const custosFixosEmpresa = custosFixosData?.[0]
+      const despesasFixasEmpresa = custosFixosEmpresa ? Number(custosFixosEmpresa.total) || 0 : 10000
+      
+      // Calcular alíquota baseada no faturamento
+      let faturamentoMaximo = 360000 // valor padrão
+      let aliquotaSimples = 6.54 // valor padrão
+      
+      if (custosFixosEmpresa?.faturamento_12) {
+        const faixa = custosFixosEmpresa.faturamento_12
+        const valorMaximo = faixa.split('-')[1]
+        faturamentoMaximo = parseFloat(valorMaximo) || 360000
+        
+        // Encontrar a alíquota correspondente
+        if (simplesData && simplesData.length > 0) {
+          const bracket = simplesData.find(s => parseFloat(s.faturamento_ate) === faturamentoMaximo)
+          if (bracket) {
+            aliquotaSimples = bracket.aliquota
+          } else {
+            // Se não encontrar exato, pegar por aproximação
+            const bracketAprox = simplesData.find(s => parseFloat(s.faturamento_ate) >= faturamentoMaximo)
+            if (bracketAprox) {
+              aliquotaSimples = bracketAprox.aliquota
+            }
+          }
+        }
+      }
+      
+      console.log('💰 Faturamento e alíquota calculados:', {
+        faturamento12: custosFixosEmpresa?.faturamento_12,
+        faturamentoMaximo,
+        aliquotaSimples
+      })
+
+      // Buscar o número de pessoas da equipe de preparação
+      const pessoasPreparacao = obra.equipe_preparacao || 0
+
+      // Buscar custo da mão de obra
+      const custoPorPessoa = 1373.47;
+      const prazoObra = obra.prazo_obra || 0;
+      const prazoPreparacao = obra.prazo_preparacao_obra || 0;
+      const prazoFinalizacao = obra.prazo_finalizacao_obra || 0;
+
+      // Buscar quantidades das equipes
+      const { data: equipesConcretagem } = await supabase
+        .from('equipes_concretagem')
+        .select('qtd_pessoas')
+        .eq('id', obra.equipes_concretagem_id)
+        .single();
+
+      const { data: equipesAcabamento } = await supabase
+        .from('equipes_acabamento')
+        .select('qtd_pessoas')
+        .eq('id', obra.equipes_acabamento_id)
+        .single();
+
+      const { data: equipesPreparacao } = await supabase
+        .from('equipes_preparacao')
+        .select('qtd_pessoas')
+        .eq('id', obra.equipes_preparacao_id)
+        .single();
+
+      const { data: equipesFinalizacao } = await supabase
+        .from('equipes_acabamento') // Finalization uses same team as finishing
+        .select('qtd_pessoas')
+        .eq('id', obra.equipes_finalizacao_id)
+        .single();
+
+      const equipeConcretagemQtd = equipesConcretagem?.qtd_pessoas || 0;
+      const equipeAcabamentoQtd = equipesAcabamento?.qtd_pessoas || 0;
+      const equipePreparacaoQtd = equipesPreparacao?.qtd_pessoas || 0;
+      const equipeFinalizacaoQtd = equipesFinalizacao?.qtd_pessoas || equipeAcabamentoQtd;
+
+      // Calcular custos específicos de cada equipe usando prazos salvos ou prazoObra como fallback
+      const prazoConcretagem = obra.prazo_concretagem || prazoObra;
+      const prazoAcabamento = obra.prazo_acabamento || prazoObra;
+      const custoEquipeConcretagem = equipeConcretagemQtd * custoPorPessoa * prazoConcretagem;
+      const custoEquipeAcabamento = equipeAcabamentoQtd * custoPorPessoa * prazoAcabamento;
+      const custoEquipePreparacao = obra.custo_preparacao || (equipePreparacaoQtd * custoPorPessoa * prazoPreparacao);
+      const custoEquipeFinalizacao = obra.custo_finalizacao || (equipeFinalizacaoQtd * custoPorPessoa * prazoFinalizacao);
+
+      // Custos de horas extras
+      const custoHorasExtraConcretagem = obra.custo_horas_extra_concretagem || 0;
+      const custoHorasExtraAcabamento = obra.custo_horas_extra_acabamento || 0;
+      const custoTotalHorasExtras = obra.custo_total_horas_extras || (custoHorasExtraConcretagem + custoHorasExtraAcabamento);
+
+      const custoTotalMaoObraSalvo = custoEquipeConcretagem + custoEquipeAcabamento + custoEquipePreparacao + custoEquipeFinalizacao + custoTotalHorasExtras;
+
+      console.log("Custos de mão de obra:", {
+        equipeConcretagemQtd,
+        equipeAcabamentoQtd,
+        equipePreparacaoQtd,
+        equipeFinalizacaoQtd,
+        custoEquipeConcretagem,
+        custoEquipeAcabamento,
+        custoEquipePreparacao,
+        custoEquipeFinalizacao,
+        custoHorasExtraConcretagem,
+        custoHorasExtraAcabamento,
+        custoTotalHorasExtras,
+        custoTotalMaoObraSalvo
+      });
+
+      // Processar equipamentos
+      let equipamentosSelecionados = obra.equipamentos_selecionados;
+      if (typeof equipamentosSelecionados === 'string') {
+        try {
+          equipamentosSelecionados = JSON.parse(equipamentosSelecionados);
+        } catch (e) {
+          console.error('Erro ao fazer parse dos equipamentos:', e);
+          equipamentosSelecionados = [];
+        }
       }
 
-      const custosFixos = {
+      // Usar custo de equipamentos já calculado se disponível
+      const custoEquipamentos = obra.custo_equipamentos || equipamentosSelecionados.reduce((total: number, equip: any) => {
+        const valorDia = parseFloat(equip.valor_dia) || 0;
+        const quantidade = parseInt(equip.quantidade) || 0;
+        const dias = prazoObra || 0;
+        return total + (valorDia * quantidade * dias);
+      }, 0);
+
+      console.log("Custos de equipamentos:", {
+        equipamentosSelecionados,
+        custoEquipamentos
+      });
+
+      // Calcular custos fixos adicionais
+      const custosFixosAdicionais = {
         frete: obra.valor_frete || 0,
         hospedagem: obra.valor_hospedagem || 0,
-        locacaoEquipamentos: custoEquipamentos, // Usar o valor calculado
+        locacaoEquipamentos: obra.valor_locacao_equipamento || 0,
         locacaoVeiculos: obra.valor_locacao_veiculos || 0,
         material: obra.valor_material || 0,
         passagem: obra.valor_passagem || 0,
         extra: obra.valor_extra || 0,
-        total:
-          (obra.valor_frete || 0) +
+        total: (obra.valor_frete || 0) +
           (obra.valor_hospedagem || 0) +
-          custoEquipamentos +
+          (obra.valor_locacao_equipamento || 0) +
           (obra.valor_locacao_veiculos || 0) +
           (obra.valor_material || 0) +
           (obra.valor_passagem || 0) +
-          (obra.valor_extra || 0),
-      }
+               (obra.valor_extra || 0)
+      };
+
+      console.log("🔧 Debug custosFixosAdicionais:", custosFixosAdicionais);
 
       // Calcular subtotal
-      const subtotal = custoTotalMaoObraSalvo + custoEquipamentos + custoMateriais.total + custosFixos.total
+      const custoExecucao = custoTotalMaoObraSalvo + 
+                           custoEquipamentos + 
+                           (obra.custo_veiculos || 0) + 
+                           custosFixosAdicionais.total
 
       // Calcular valor total e lucro
-      const precoVendaM2 = obra.preco_venda_metro_quadrado || 0
-      const valorTotal = precoVendaM2 * (obra.area_total_metros_quadrados || 0)
-      const lucroTotal = valorTotal - subtotal
+      const valorTotal = (obra.preco_venda_metro_quadrado || 0) * (obra.area_total_metros_quadrados || 0)
+      const lucroTotal = valorTotal - custoExecucao
 
-      // Converter os dados da obra para o formato de resultado temporário
-      const resultado = {
-        custoMaoObra: {
-          concretagem: 0, // Não temos breakdown individual, apenas total
-          acabamento: 0,
-          preparacao: 0,
-          finalizacao: 0,
-          total: custoTotalMaoObraSalvo,
+      // Buscar nome do tipo de acabamento
+      let tipoAcabamentoData = null;
+      let valorInsumosPorM2 = 0;
+
+      if (obra.tipo_acabamento_id) {
+        const { data, error } = await supabase
+          .from('tipo_acabamento')
+          .select('*')
+          .eq('id', obra.tipo_acabamento_id)
+          .single();
+        
+        if (!error && data) {
+          tipoAcabamentoData = data;
+          // Definir valor dos insumos baseado no tipo de acabamento
+          switch (data.nome) {
+            case 'Liso Polido':
+              valorInsumosPorM2 = 0.32;
+              break;
+            case 'Camurçado':
+              valorInsumosPorM2 = 0.20;
+              break;
+            case 'Vassourado':
+              valorInsumosPorM2 = 0.12;
+              break;
+            default:
+              valorInsumosPorM2 = 0;
+          }
+        }
+      }
+
+      console.log("Tipo de acabamento encontrado:", tipoAcabamentoData);
+      console.log("Valor dos insumos por m²:", { tipoAcabamento: tipoAcabamentoData?.nome, valorPorM2: valorInsumosPorM2 });
+      const custoTotalInsumos = valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0)
+
+      // Debug: verificar valores da obra
+      console.log("Valores da obra:", {
+        id: obra.id,
+        nome: obra.nome,
+        created_at: obra.created_at,
+        area_por_dia: obra.area_por_dia,
+        prazo_obra: obra.prazo_obra,
+        area_total_metros_quadrados: obra.area_total_metros_quadrados,
+        custo_locacao_equipamento: obra.custo_locacao_equipamento,
+        valor_locacao_equipamento: obra.valor_locacao_equipamento
+      });
+
+      // Montar resultado da simulação
+      const resultado: SimulacaoResultType = {
+        dadosTecnicos: {
+          reforcoEstrutural: obra.tipo_reforco_estrutural_id?.toString() || "",
+          areaTotal: obra.area_total_metros_quadrados || 0,
+          areaPorDia: obra.area_por_dia || 0,
+          prazoTotal: obra.prazo_obra || 0,
+          espessura: (obra.espessura_piso || 0) / 100,
+          lancamento: obra.lancamento_concreto || 0,
+          areaConcretaPorHora: obra.area_por_hora || 0,
+          inicioConcretagem: obra.horas_inicio_concretagem || "",
+          inicioAcabamento: obra.horas_inicio_acabamento || "",
+          finalAcabamento: obra.final_acabamento || "",
+          horasConcretagem: obra.hora_concretagem || 0,
+          horasAcabamento: obra.hora_acabamento || 0,
+          sobreposicaoCA: obra.sobreposicao_ca || 0,
+          concreto: (obra.area_total_metros_quadrados || 0) * ((obra.espessura_piso || 0) / 100),
+          finalConcretagem: obra.final_concretagem || "",
+          preparoDiaSeguinte: Math.max(0, 19 - 17) // Calcula baseado no final do acabamento (19h) - 17h
         },
-        custoEquipamentos: custoEquipamentos, // Agora calculado do JSONB
-        custoMateriais: custoMateriais,
-        custosFixos: custosFixos,
-        precoVendaM2: precoVendaM2,
-        valorTotal: valorTotal,
-        lucroTotal: lucroTotal,
-        volumeConcretoM3: volumeConcretoM3,
-        diasTotais: diasTotais,
-        subtotal: subtotal,
-        valorComComissao: subtotal * (1 + (obra.percentual_comissao || 0) / 100),
-        veiculosDetalhados: veiculosDetalhados // Adicionar veículos ao resultado
+        equipeConcretagemAcabamento: {
+          equipeTotal: equipeConcretagemQtd + equipeAcabamentoQtd,
+          custoEquipe: custoEquipeConcretagem + custoEquipeAcabamento, // Usar valores calculados das equipes específicas
+          equipeConcretagem: equipeConcretagemQtd,
+          horasExtraEquipeConcretagem: obra.horas_extra_concretagem || 0,
+          custoHEEquipeConcretagem: obra.custo_horas_extra_concretagem || 0,
+          horaExtraEquipeAcabamento: obra.horas_extra_acabamento || 0,
+          equipeAcabamento: equipeAcabamentoQtd,
+          custoHEAcabamento: obra.custo_horas_extra_acabamento || 0,
+          totalEquipe: obra.custo_mao_obra || 0, // Total de toda a mão de obra (já calculado e salvo)
+          percentualTotalEquipe: valorTotal > 0 ? ((obra.custo_mao_obra || 0) / valorTotal) * 100 : 0
+        },
+        preparacaoObra: {
+          equipeTotal: equipePreparacaoQtd,
+          prazo: prazoPreparacao,
+          custoPreparacao: obra.custo_preparacao || 0, // Usar valor do banco
+          totalEquipe: obra.custo_preparacao || 0,
+          percentualTotalEquipe: valorTotal > 0 ? ((obra.custo_preparacao || 0) / valorTotal) * 100 : 0
+        },
+        finalizacaoObra: {
+          equipeTotal: equipeFinalizacaoQtd,
+          prazo: prazoFinalizacao,
+          custoFinalizacao: obra.custo_finalizacao || 0, // Usar valor do banco
+          totalEquipe: obra.custo_mao_obra || 0, // Total de toda a mão de obra
+          percentualTotalEquipe: valorTotal > 0 ? ((obra.custo_mao_obra || 0) / valorTotal) * 100 : 0
+        },
+        equipamentos: {
+          equipamentos: equipamentosSelecionados,
+          totalEquipamentos: obra.custo_equipamentos || 0, // Usar valor do banco
+          percentualTotalEquipamentos: valorTotal > 0 ? ((obra.custo_equipamentos || 0) / valorTotal) * 100 : 0,
+          quantidadeEquipamentos: equipamentosSelecionados.reduce((total: number, equip: any) => total + (equip.quantidade || 0), 0)
+        },
+        veiculos: {
+          veiculos: [], // Usar dados dos veículos do banco se necessário
+          totalVeiculos: obra.custo_veiculos || 0, // Usar valor do banco
+          percentualTotalVeiculos: valorTotal > 0 ? ((obra.custo_veiculos || 0) / valorTotal) * 100 : 0
+        },
+        insumos: {
+          tipoAcabamento: tipoAcabamentoData?.nome || "",
+          area: obra.area_total_metros_quadrados || 0,
+          dias: obra.prazo_obra || 0,
+          valorPorM2: valorInsumosPorM2,
+          totalInsumos: valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0),
+          percentualTotalInsumos: valorTotal > 0 ? ((valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0)) / valorTotal) * 100 : 0
+        },
+        demaisDespesasFixas: {
+          valorEmpresaPorM2: custosFixosEmpresa?.media_final || 0, // Usar media_final da tabela
+          valorTotalPorM2: obra.area_total_metros_quadrados > 0 ? (custoExecucao + despesasFixasEmpresa) / obra.area_total_metros_quadrados : 0,
+          areaTotalObra: obra.area_total_metros_quadrados || 0,
+          despesasFixas: despesasFixasEmpresa,
+          percentualDespesasFixas: (custoExecucao + despesasFixasEmpresa) > 0 ? (despesasFixasEmpresa / (custoExecucao + despesasFixasEmpresa)) * 100 : 0,
+          custoExecucao: custoExecucao,
+          percentualCustoExecucao: (custoExecucao + despesasFixasEmpresa) > 0 ? (custoExecucao / (custoExecucao + despesasFixasEmpresa)) * 100 : 0,
+          // Adicionar campos específicos dos custos fixos
+          totalCustosFixos: custosFixosEmpresa?.total || 0,
+          mediaMes: custosFixosEmpresa?.media_mes || 0,
+          mediaFinal: custosFixosEmpresa?.media_final || 0,
+          // Custo total usado na fórmula do preço de venda
+          custoTotalObra: obra.custo_total_obra || (custoExecucao + despesasFixasEmpresa)
+        },
+        custoDerivadosVenda: {
+          faturamento12Meses: faturamentoMaximo,
+          percentualFaturamento: 100,
+          impostoSimples: (obra.valor_total || 0) * (aliquotaSimples / 100),
+          percentualImpostoSimples: aliquotaSimples,
+          margemLucro: obra.lucro_total || 0,
+          percentualMargemLucro: obra.percentual_lucro_desejado || 25,
+          comissoes: (obra.valor_total || 0) * ((obra.percentual_comissao || 0) / 100),
+          percentualComissoes: obra.percentual_comissao || 0
+        },
+        outrosCustos: {
+          totalOutrosCustos: custosFixosAdicionais.total,
+          totalM2: custosFixosAdicionais.total / (obra.area_total_metros_quadrados || 1),
+          frete: custosFixosAdicionais.frete,
+          hospedagem: custosFixosAdicionais.hospedagem,
+          locacaoEquipamento: custosFixosAdicionais.locacaoEquipamentos,
+          locacaoVeiculo: custosFixosAdicionais.locacaoVeiculos,
+          material: custosFixosAdicionais.material,
+          passagem: custosFixosAdicionais.passagem,
+          extra: custosFixosAdicionais.extra
+        },
+        precoVenda: {
+          precoVendaPorM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0, // Preço calculado pela fórmula
+          sePrecoVendaPorM2For: obra.preco_venda_metro_quadrado || 0, // Valor manual inserido pelo usuário
+          valorTotal: obra.valor_total || 0, // Usar valor total do banco
+          resultado1: obra.lucro_total || 0, // Usar lucro total do banco
+          resultadoPercentual: (obra.valor_total && obra.lucro_total) ? (obra.lucro_total / obra.valor_total) * 100 : 0
+        },
+        valorTotal: obra.valor_total || 0, // Usar valor total do banco
+        precoVendaM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0,
+        lucroTotal: obra.lucro_total || 0, // Usar lucro total do banco
+        custoEquipamentos: obra.custo_equipamentos || 0, // Usar valor do banco
+        custoVeiculos: obra.custo_veiculos || 0, // Usar valor do banco
+        diasTotais: obra.prazo_obra || 0,
+        volumeConcretoM3: (obra.area_total_metros_quadrados || 0) * ((obra.espessura_piso || 0) / 100)
       }
 
       console.log("Resultado da simulação montado:", resultado)
-      console.log("Tipo de equipamentos_selecionados:", typeof obra.equipamentos_selecionados)
-      console.log("Valor de equipamentos_selecionados:", obra.equipamentos_selecionados)
-      
-      // Converter para o formato detalhado
-      const resultadoDetalhado = adaptToDetailedFormat(
-        resultado, 
-        { ...obra, pessoasPreparacao }, 
-        tipoReforcoEstruturalNome
-      )
-      setSimulationResult(resultadoDetalhado)
+      console.log("Tipo de equipamentos_selecionados:", typeof equipamentosSelecionados)
+      console.log("Valor de equipamentos_selecionados:", equipamentosSelecionados)
+
+      setSimulationResult(resultado)
       setShowResults(true)
     } catch (error) {
       console.error("Erro ao visualizar simulação:", error)
@@ -487,6 +758,42 @@ export default function SimulacaoPage() {
   return (
     <div className="container mx-auto py-6 font-family: Roboto;">
       <SimulacaoHeader simulacoes={simulacoes} />
+
+      {/* Revenue Input Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Faturamento da Empresa</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-md">
+            <Label htmlFor="revenue-range" className="text-sm font-medium">
+              Faturamento dos últimos 12 meses
+            </Label>
+            <Select value={selectedRevenueRange} onValueChange={handleRevenueChange}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Selecione o faturamento" />
+              </SelectTrigger>
+              <SelectContent>
+                {revenueRanges.map((range) => (
+                  <SelectItem key={range.value} value={range.value}>
+                    {range.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {custoFixoError && (
+              <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+                <p className="text-sm text-red-600">{custoFixoError}</p>
+                {custoFixoError.includes('configurar seus custos fixos') && (
+                  <Link href="/custo-fixo" className="mt-2 inline-block text-sm text-blue-600 hover:text-blue-800 underline">
+                    Ir para Custo Fixo
+                  </Link>
+                )}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="simulacoes" className="w-full">
         <div className="flex justify-between items-center mb-6">
@@ -522,6 +829,8 @@ export default function SimulacaoPage() {
             onDuplicate={handleDuplicate}
             onDelete={handleDelete}
             onViewSimulation={handleViewSimulation}
+            onRefazer={handleRefazer}
+            onAjustarPreco={handleAjustarPreco}
             onNovaSimulacao={() => {}}
             onClearFilters={clearFilters}
             hasFilters={hasFilters}
@@ -569,7 +878,10 @@ export default function SimulacaoPage() {
               <p className="mt-4 text-gray-500">Carregando dados da simulação...</p>
             </div>
           ) : simulationResult ? (
-            <SimulationResult data={simulationResult} onVoltar={() => setShowResults(false)} />
+            <SimulationResult
+              data={simulationResult}
+              onVoltar={() => setShowResults(false)}
+            />
           ) : (
             <div className="flex flex-col items-center justify-center py-8">
               <div className="bg-yellow-100 p-3 rounded-full mb-4">

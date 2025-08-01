@@ -62,7 +62,7 @@ export function useSimulacoes() {
         data: formatarData(obra.data_inicio),
         status: obra.status || "indefinida",
         valor: formatarMoeda(obra.valor_total || 0),
-        precoM2: formatarMoeda(obra.preco_venda_metro_quadrado || 0),
+        precoM2: formatarMoeda(obra.preco_venda_metro_quadrado_calculo || 0),
         lucro: `${obra.percentual_lucro_desejado || 0}%`,
       }))
 

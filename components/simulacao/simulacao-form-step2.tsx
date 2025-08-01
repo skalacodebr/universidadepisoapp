@@ -193,7 +193,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
             </SelectTrigger>
             <SelectContent>
               {loadingOptions ? (
-                <SelectItem value="" disabled>
+                <SelectItem value="loading" disabled>
                   Carregando equipes...
                 </SelectItem>
               ) : equipesConcretagem.length > 0 ? (
@@ -203,7 +203,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="" disabled>
+                <SelectItem value="no-data" disabled>
                   Nenhuma equipe encontrada
                 </SelectItem>
               )}
@@ -222,7 +222,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
             </SelectTrigger>
             <SelectContent>
               {loadingOptions ? (
-                <SelectItem value="" disabled>
+                <SelectItem value="loading" disabled>
                   Carregando equipes...
                 </SelectItem>
               ) : equipesAcabamento.length > 0 ? (
@@ -232,7 +232,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="" disabled>
+                <SelectItem value="no-data" disabled>
                   Nenhuma equipe encontrada
                 </SelectItem>
               )}
@@ -256,7 +256,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
               </SelectTrigger>
               <SelectContent>
                 {loadingOptions ? (
-                  <SelectItem value="" disabled>
+                  <SelectItem value="loading" disabled>
                     Carregando equipes...
                   </SelectItem>
                 ) : equipePreparacaoOptions.length > 0 ? (
@@ -266,7 +266,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
                     </SelectItem>
                   ))
                 ) : (
-                  <SelectItem value="" disabled>
+                  <SelectItem value="no-data" disabled>
                     Nenhuma equipe encontrada
                   </SelectItem>
                 )}
@@ -301,7 +301,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
               </SelectTrigger>
               <SelectContent>
                 {loadingOptions ? (
-                  <SelectItem value="" disabled>
+                  <SelectItem value="loading" disabled>
                     Carregando equipes...
                   </SelectItem>
                 ) : equipeFinalizacaoOptions.length > 0 ? (
@@ -311,7 +311,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
                     </SelectItem>
                   ))
                 ) : (
-                  <SelectItem value="" disabled>
+                  <SelectItem value="no-data" disabled>
                     Nenhuma equipe encontrada
                   </SelectItem>
                 )}
@@ -381,7 +381,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
                   </SelectTrigger>
                   <SelectContent>
                     {loadingOptions ? (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="loading" disabled>
                         Carregando equipamentos...
                       </SelectItem>
                     ) : equipamentosDisponiveis.length > 0 ? (
@@ -391,7 +391,7 @@ export function SimulacaoFormStep2({ onNext, onPrevious, formData, updateFormDat
                         </SelectItem>
                       ))
                     ) : (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="no-data" disabled>
                         Nenhum equipamento encontrado
                       </SelectItem>
                     )}

@@ -12,7 +12,7 @@ export interface Database {
       custofixo_usuario: {
         Row: {
           id: number
-          userid: number
+          userid: string
           total: number
           created_at: string
           aluguel: number
@@ -56,7 +56,7 @@ export interface Database {
         }
         Insert: {
           id?: number
-          userid: number
+          userid: string
           total: number
           created_at?: string
           aluguel: number
@@ -100,7 +100,7 @@ export interface Database {
         }
         Update: {
           id?: number
-          userid?: number
+          userid?: string
           total?: number
           created_at?: string
           aluguel?: number

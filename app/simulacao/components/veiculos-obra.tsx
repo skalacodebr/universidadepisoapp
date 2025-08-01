@@ -402,7 +402,7 @@ export function VeiculosObra() {
                     </SelectTrigger>
                     <SelectContent>
                       {veiculosDisponiveis.length === 0 ? (
-                        <SelectItem value="loading" disabled>
+                        <SelectItem value="no-data" disabled>
                           Nenhum veículo disponível
                         </SelectItem>
                       ) : (

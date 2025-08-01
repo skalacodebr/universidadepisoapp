@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card"
 import { NumericFormat } from "react-number-format"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 
 const supabase = getSupabaseClient()
 
@@ -33,6 +34,29 @@ const CurrencyInput = ({ id, value, onChange, label }: {
       prefix="R$ "
       placeholder="R$ 0,00"
       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-transform-uppercase"
+    />
+  </div>
+)
+
+// Componente personalizado para input numérico simples
+const NumberInput = ({ id, value, onChange, label, placeholder }: { 
+  id: string
+  value: string
+  onChange: (value: string) => void
+  label: string
+  placeholder?: string
+}) => (
+  <div className="space-y-2">
+    <Label htmlFor={id}>{label}</Label>
+    <NumericFormat
+      id={id}
+      value={value}
+      onValueChange={(values) => onChange(values.value)}
+      thousandSeparator="."
+      decimalSeparator=","
+      decimalScale={2}
+      placeholder={placeholder || "0,00"}
+      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
     />
   </div>
 )
@@ -86,10 +110,14 @@ interface CustoFixoFormData {
   taxasMunicipais: string
   sindicatos: string
   hospedagemSite: string
+
+  // Média de metro quadrado por mês
+  mediaMes: string
 }
 
 export default function CustoFixoPage() {
   const router = useRouter()
+  const { user } = useAuth()
   
   const [formData, setFormData] = useState<CustoFixoFormData>({
     // Instalações (I)
@@ -139,7 +167,10 @@ export default function CustoFixoPage() {
     custosBancarios: "",
     taxasMunicipais: "",
     sindicatos: "",
-    hospedagemSite: ""
+    hospedagemSite: "",
+
+    // Média de metro quadrado por mês
+    mediaMes: ""
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -158,16 +189,32 @@ export default function CustoFixoPage() {
       try {
         setIsLoadingData(true)
         
-        console.log('🔍 Buscando dados existentes...')
+        console.log('🔍 Iniciando busca de dados - User ID:', user?.id)
+        
+        if (!user?.id) {
+          console.log('⚠️ Usuário não autenticado ou ID não disponível')
+          setIsLoadingData(false)
+          return
+        }
         
         const { data, error } = await supabase
           .from('custofixo_usuario')
           .select('*')
-          .eq('userid', 1) // Usando o mesmo userid padrão
+          .eq('userid', user.id)
           .order('created_at', { ascending: false })
           .limit(1)
 
-        console.log('📊 Resposta do Supabase:', { data, error })
+        console.log('📊 Resposta do Supabase:', { 
+          success: !error,
+          recordCount: data?.length || 0,
+          error: error?.message,
+          firstRecord: data?.[0] ? {
+            id: data[0].id,
+            userid: data[0].userid,
+            total: data[0].total,
+            created_at: data[0].created_at
+          } : null
+        })
 
         if (error) {
           console.error('❌ Erro ao buscar dados existentes:', error)
@@ -176,16 +223,55 @@ export default function CustoFixoPage() {
 
         if (data && data.length > 0) {
           const record = data[0]
-          console.log('✅ Registro encontrado:', record)
+          console.log('✅ Registro encontrado:', {
+            id: record.id,
+            userid: record.userid,
+            total: record.total,
+            created_at: record.created_at,
+            aluguel: record.aluguel,
+            // Log first few fields as example
+          })
           
-          console.log('📌 Definindo existingRecordId:', record.id)
           setExistingRecordId(record.id)
           
           // Converter números de volta para strings formatadas
           const formatNumber = (value: number | null) => {
-            console.log('🔄 Formatando valor:', value, 'tipo:', typeof value)
             if (value === null || value === undefined) return ""
-            return value.toString()
+            
+            try {
+              // Garante que o valor tem no máximo 2 casas decimais
+              const fixedValue = Math.round((value + Number.EPSILON) * 100) / 100
+              
+              // Formata como moeda brasileira
+              return fixedValue.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })
+            } catch (error) {
+              console.error('Erro ao formatar número:', value, error)
+              return "R$ 0,00"
+            }
+          }
+
+          // Função para formatar números simples (sem formatação monetária)
+          const formatSimpleNumber = (value: number | null) => {
+            if (value === null || value === undefined) return ""
+            
+            try {
+              // Garante que o valor tem no máximo 2 casas decimais
+              const fixedValue = Math.round((value + Number.EPSILON) * 100) / 100
+              
+              // Formata como número simples
+              return fixedValue.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              })
+            } catch (error) {
+              console.error('Erro ao formatar número simples:', value, error)
+              return "0,00"
+            }
           }
 
           const newFormData = {
@@ -232,6 +318,7 @@ export default function CustoFixoPage() {
             taxasMunicipais: formatNumber(record.taxas_municipais_estaduais_federais),
             sindicatos: formatNumber(record.sindicatos_patronal),
             hospedagemSite: formatNumber(record.hospedagem_manutencao_site),
+            mediaMes: formatSimpleNumber(record.media_mes)
           }
 
           console.log('📝 Dados formatados para o form:', newFormData)
@@ -256,11 +343,61 @@ export default function CustoFixoPage() {
   }
 
   const total = useMemo(() => {
-    return Object.values(formData).reduce((acc, curr) => {
-      const value = parseFloat(curr.replace(/[^\d,]/g, '').replace(',', '.')) || 0
-      return acc + value
-    }, 0)
+    const sum = Object.entries(formData).reduce((acc, [key, curr]) => {
+      // Se o valor estiver vazio ou for zero
+      if (!curr || curr === "0") return acc;
+
+      // Se o valor já estiver no formato "X.XX"
+      if (/^\d+\.\d{2}$/.test(curr)) {
+        const value = parseFloat(curr);
+        console.log(`Campo ${key}: Original="${curr}" -> Número=${value} (formato decimal)`);
+        return acc + value;
+      }
+
+      // Se o valor estiver no formato "R$ X.XXX,XX"
+      let cleanValue = curr;
+      // Remove R$ e espaços
+      cleanValue = cleanValue.replace(/R\$\s*/g, '');
+      // Remove pontos de milhar
+      cleanValue = cleanValue.replace(/\./g, '');
+      // Substitui vírgula por ponto
+      cleanValue = cleanValue.replace(',', '.');
+      
+      const value = parseFloat(cleanValue) || 0;
+      console.log(`Campo ${key}: Original="${curr}" -> Limpo="${cleanValue}" -> Número=${value}`);
+      
+      return acc + value;
+    }, 0);
+
+    console.log('Total calculado:', sum);
+    return sum;
   }, [formData])
+
+  // Calcular média final (total / media_mes)
+  const mediaFinal = useMemo(() => {
+    if (!formData.mediaMes || formData.mediaMes === "0" || formData.mediaMes === "") {
+      return 0;
+    }
+
+    // Converter mediaMes para número (sem formatação monetária)
+    let mediaMesValue = formData.mediaMes;
+    // Remove pontos de milhar e substitui vírgula por ponto
+    mediaMesValue = mediaMesValue.replace(/\./g, '').replace(',', '.');
+    
+    const mediaMesNum = parseFloat(mediaMesValue) || 0;
+    
+    if (mediaMesNum === 0) return 0;
+    
+    const result = total / mediaMesNum;
+    console.log('🔍 DEBUG - Média final calculada:', { 
+      mediaMesOriginal: formData.mediaMes,
+      mediaMesLimpo: mediaMesValue,
+      mediaMesNum: mediaMesNum,
+      total: total,
+      result: result 
+    });
+    return result;
+  }, [total, formData.mediaMes])
 
   const formatCurrency = (value: number) => {
     return value.toLocaleString('pt-BR', {
@@ -272,7 +409,43 @@ export default function CustoFixoPage() {
   const parseFormDataForDB = (data: CustoFixoFormData) => {
     const parsed: Record<string, number> = {}
     Object.entries(data).forEach(([key, value]) => {
-      parsed[key] = parseFloat(value.replace(/[^\d,]/g, '').replace(',', '.')) || 0
+      // Se o valor estiver vazio, retorna 0
+      if (!value) {
+        parsed[key] = 0
+        return
+      }
+
+      try {
+        // Remove o prefixo R$ e espaços
+        let cleanValue = value.replace(/R\$\s*/g, '').trim()
+        
+        // Se não houver valor após limpar, retorna 0
+        if (!cleanValue) {
+          parsed[key] = 0
+          return
+        }
+
+        // Remove TODOS os caracteres não numéricos (exceto vírgula)
+        cleanValue = cleanValue.replace(/[^\d,]/g, '')
+        
+        // Agora temos algo como "5700,00"
+        // Removemos a vírgula e convertemos para número
+        const number = parseInt(cleanValue.replace(',', ''), 10)
+        
+        // Como removemos a vírgula decimal, precisamos dividir por 100
+        // para obter o valor correto
+        parsed[key] = number / 100
+
+        console.log(`Convertendo ${key}:`, {
+          original: value,
+          limpo: cleanValue,
+          numero: number,
+          final: parsed[key]
+        })
+      } catch (error) {
+        console.error(`Erro ao processar valor para ${key}:`, value, error)
+        parsed[key] = 0
+      }
     })
     return parsed
   }
@@ -282,14 +455,18 @@ export default function CustoFixoPage() {
     setIsLoading(true)
 
     try {
+      console.log('Valores do formulário antes do parsing:', formData)
       const parsedData = parseFormDataForDB(formData)
+      console.log('Valores após parsing para o banco:', parsedData)
 
       if (existingRecordId) {
         // Atualizar registro existente
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('custofixo_usuario')
           .update({
             total: total,
+            media_mes: parseFloat((formData.mediaMes || '0').replace(/\./g, '').replace(',', '.')) || 0,
+            media_final: mediaFinal,
             aluguel: parsedData.aluguel,
             irpj_sobre_aluguel: parsedData.irpjSobreAluguel,
             iptu: parsedData.iptu,
@@ -335,20 +512,24 @@ export default function CustoFixoPage() {
             hospedagem_manutencao_site: parsedData.hospedagemSite,
           })
           .eq('id', existingRecordId)
+          .select()
 
         if (error) {
           console.error('Erro do Supabase:', error)
           throw error
         }
 
+        console.log('Dados salvos no banco:', data)
         alert("Custos fixos atualizados com sucesso!")
       } else {
         // Criar novo registro
         const { error } = await supabase
           .from('custofixo_usuario')
           .insert({
-            userid: 1,
+            userid: user?.id,
             total: total,
+            media_mes: parseFloat((formData.mediaMes || '0').replace(/\./g, '').replace(',', '.')) || 0,
+            media_final: mediaFinal,
             aluguel: parsedData.aluguel,
             irpj_sobre_aluguel: parsedData.irpjSobreAluguel,
             iptu: parsedData.iptu,
@@ -722,6 +903,13 @@ export default function CustoFixoPage() {
                       onChange={(value) => handleChange("hospedagemSite", value)}
                       label="Hospedagem/Manutenção Site"
                     />
+                    <NumberInput
+                      id="mediaMes"
+                      value={formData.mediaMes}
+                      onChange={(value) => handleChange("mediaMes", value)}
+                      label="Média de Metro Quadrado por Mês"
+                      placeholder="0,00"
+                    />
                   </div>
                 </Card>
               </TabsContent>
@@ -732,6 +920,17 @@ export default function CustoFixoPage() {
                 <span className="text-lg font-semibold">Total dos Custos Fixos:</span>
                 <span className="text-xl font-bold text-green-700">{formatCurrency(total)}</span>
               </div>
+              {formData.mediaMes && formData.mediaMes !== "0" && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-lg font-semibold">Média Final (por m²):</span>
+                    <span className="text-xl font-bold text-blue-700">{formatCurrency(mediaFinal)}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Total ÷ Média de m² por mês = {formatCurrency(total)} ÷ {formData.mediaMes.replace(/\./g, '').replace(',', '.')} m² = {formatCurrency(mediaFinal)}
+                  </p>
+                </div>
+              )}
             </Card>
 
             <div className="flex justify-end space-x-4">

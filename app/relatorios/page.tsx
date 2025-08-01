@@ -25,6 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Sidebar } from "@/components/layout/sidebar"
+import { Header } from "@/components/layout/header"
 
 // Tipos para os relatórios
 interface Relatorio {
@@ -255,203 +257,209 @@ export default function Relatorios() {
   }
 
   return (
-    <main className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8">Relatórios</h1>
+    <>
+      <Sidebar />
+      <div className="min-h-screen bg-gray-50 pl-64">
+        <Header />
+        <main className="p-6">
+          <div className="max-w-7xl mx-auto">
+            <h1 className="text-3xl font-bold text-gray-800 mb-8">Relatórios</h1>
 
-        <div className="flex flex-col md:flex-row gap-6 mb-8">
-          <div className="md:flex-1 space-y-2">
-            <p className="text-sm text-gray-500 font-medium">Tipo</p>
-            <Select value={tipoRelatorio} onValueChange={setTipoRelatorio}>
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="orcado-realizado">Orçado X Realizado</SelectItem>
-                <SelectItem value="lucro-prejuizo">Lucro/Prejuízo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="md:flex-1 space-y-2">
-            <p className="text-sm text-gray-500 font-medium">Período</p>
-            <Select value={periodo} onValueChange={setPeriodo}>
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="ultimo-mes">Último mês</SelectItem>
-                <SelectItem value="ultimo-trimestre">Último trimestre</SelectItem>
-                <SelectItem value="ultimo-ano">Último ano</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="md:flex-1 space-y-2">
-            <p className="text-sm text-gray-500 font-medium">Obra</p>
-            <Select value={obra} onValueChange={setObra}>
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="obra1">Obra 1</SelectItem>
-                <SelectItem value="obra2">Obra 2</SelectItem>
-                <SelectItem value="obra3">Obra 3</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-end">
-            <Button
-              onClick={gerarRelatorio}
-              className="bg-[#1e2a4a] hover:bg-[#15203a] text-white h-10 w-[170px]"
-            >
-              Gerar relatório
-            </Button>
-          </div>
-        </div>
-
-        {mensagemErro && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                clipRule="evenodd"
-              />
-            </svg>
-            {mensagemErro}
-          </div>
-        )}
-
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Relatórios gerados</h2>
-
-        <Card className="border-0 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Tipo de relatório
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Data
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Obra
-                  </th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Ações
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {relatoriosPaginados.length > 0 ? (
-                  relatoriosPaginados.map((relatorio, index) => (
-                    <tr key={relatorio.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="flex items-center">
-                          <FileText className="h-4 w-4 mr-2 text-[#007EA3]" />
-                          {relatorio.tipo}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{relatorio.data}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{relatorio.obra}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                        <div className="flex justify-center">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem 
-                                onClick={() => visualizarRelatorio(relatorio.tipo)}
-                                className="cursor-pointer"
-                              >
-                                <Eye className="h-4 w-4 mr-2" />
-                                Visualizar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={() => exportarRelatorio(relatorio.id, relatorio.tipo)}
-                                className="cursor-pointer"
-                              >
-                                <Download className="h-4 w-4 mr-2" />
-                                Exportar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => confirmarExclusao(relatorio.id)}
-                                className="cursor-pointer text-red-500 hover:text-red-700 focus:text-red-700"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Excluir
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">
-                      Nenhum relatório gerado ainda.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {/* Paginação - Agora fora do Card */}
-        {totalPaginas > 0 && (
-          <div className="flex flex-col sm:flex-row justify-between items-center mt-6 text-sm text-gray-500">
-            <div className="text-gray-500 mb-4 sm:mb-0">
-              Mostrando {indiceInicial + 1}-{indiceFinal < 10 ? `0${indiceFinal}` : indiceFinal} de{" "}
-              {totalItens < 10 ? `0${totalItens}` : totalItens}
-            </div>
-            <div className="flex items-center">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0 mr-2"
-                disabled={paginaAtual === 1}
-                onClick={() => mudarPagina(paginaAtual - 1)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="flex items-center space-x-1">
-                {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((pagina) => (
-                  <Button
-                    key={pagina}
-                    variant={pagina === paginaAtual ? "default" : "outline"}
-                    size="sm"
-                    className={`h-8 w-8 p-0 ${pagina === paginaAtual ? "bg-[#007EA3] text-white" : "text-gray-700"}`}
-                    onClick={() => mudarPagina(pagina)}
-                  >
-                    {pagina}
-                  </Button>
-                ))}
+            <div className="flex flex-col md:flex-row gap-6 mb-8">
+              <div className="md:flex-1 space-y-2">
+                <p className="text-sm text-gray-500 font-medium">Tipo</p>
+                <Select value={tipoRelatorio} onValueChange={setTipoRelatorio}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="orcado-realizado">Orçado X Realizado</SelectItem>
+                    <SelectItem value="lucro-prejuizo">Lucro/Prejuízo</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 w-8 p-0 ml-2"
-                disabled={paginaAtual === totalPaginas}
-                onClick={() => mudarPagina(paginaAtual + 1)}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              <div className="md:flex-1 space-y-2">
+                <p className="text-sm text-gray-500 font-medium">Período</p>
+                <Select value={periodo} onValueChange={setPeriodo}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="ultimo-mes">Último mês</SelectItem>
+                    <SelectItem value="ultimo-trimestre">Último trimestre</SelectItem>
+                    <SelectItem value="ultimo-ano">Último ano</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="md:flex-1 space-y-2">
+                <p className="text-sm text-gray-500 font-medium">Obra</p>
+                <Select value={obra} onValueChange={setObra}>
+                  <SelectTrigger className="w-full bg-white">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="obra1">Obra 1</SelectItem>
+                    <SelectItem value="obra2">Obra 2</SelectItem>
+                    <SelectItem value="obra3">Obra 3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-end">
+                <Button
+                  onClick={gerarRelatorio}
+                  className="bg-[#1e2a4a] hover:bg-[#15203a] text-white h-10 w-[170px]"
+                >
+                  Gerar relatório
+                </Button>
+              </div>
             </div>
+
+            {mensagemErro && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                {mensagemErro}
+              </div>
+            )}
+
+            <h2 className="text-xl font-bold text-gray-800 mb-4">Relatórios gerados</h2>
+
+            <Card className="border-0 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipo de relatório
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Data
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Obra
+                      </th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Ações
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {relatoriosPaginados.length > 0 ? (
+                      relatoriosPaginados.map((relatorio, index) => (
+                        <tr key={relatorio.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="flex items-center">
+                              <FileText className="h-4 w-4 mr-2 text-[#007EA3]" />
+                              {relatorio.tipo}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{relatorio.data}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{relatorio.obra}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                            <div className="flex justify-center">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem 
+                                    onClick={() => visualizarRelatorio(relatorio.tipo)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Eye className="h-4 w-4 mr-2" />
+                                    Visualizar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => exportarRelatorio(relatorio.id, relatorio.tipo)}
+                                    className="cursor-pointer"
+                                  >
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Exportar
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => confirmarExclusao(relatorio.id)}
+                                    className="cursor-pointer text-red-500 hover:text-red-700 focus:text-red-700"
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-sm text-gray-500">
+                          Nenhum relatório gerado ainda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Paginação - Agora fora do Card */}
+            {totalPaginas > 0 && (
+              <div className="flex flex-col sm:flex-row justify-between items-center mt-6 text-sm text-gray-500">
+                <div className="text-gray-500 mb-4 sm:mb-0">
+                  Mostrando {indiceInicial + 1}-{indiceFinal < 10 ? `0${indiceFinal}` : indiceFinal} de{" "}
+                  {totalItens < 10 ? `0${totalItens}` : totalItens}
+                </div>
+                <div className="flex items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 mr-2"
+                    disabled={paginaAtual === 1}
+                    onClick={() => mudarPagina(paginaAtual - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((pagina) => (
+                      <Button
+                        key={pagina}
+                        variant={pagina === paginaAtual ? "default" : "outline"}
+                        size="sm"
+                        className={`h-8 w-8 p-0 ${pagina === paginaAtual ? "bg-[#007EA3] text-white" : "text-gray-700"}`}
+                        onClick={() => mudarPagina(pagina)}
+                      >
+                        {pagina}
+                      </Button>
+                    ))}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0 ml-2"
+                    disabled={paginaAtual === totalPaginas}
+                    onClick={() => mudarPagina(paginaAtual + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </main>
       </div>
       {/* Modal de Confirmação de Exclusão */}
       <AlertDialog open={modalExcluirAberto} onOpenChange={setModalExcluirAberto}>
@@ -507,6 +515,6 @@ export default function Relatorios() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
-    </main>
+    </>
   )
 }

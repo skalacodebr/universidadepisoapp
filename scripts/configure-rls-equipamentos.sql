@@ -78,4 +78,4 @@ BEGIN
     ('Betoneira', 30.00, '0'),
     ('Serra Circular', 25.00, '0');
 END;
-$$; 
+$$;

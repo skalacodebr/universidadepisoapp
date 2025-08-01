@@ -591,7 +591,7 @@ export function SimulacaoForm({ onSubmit }: SimulacaoFormProps) {
             
             <div className="space-y-3">
               <Label htmlFor="precoVendaM2">
-                Preço de venda por m² <span className="text-red-500">*</span>
+                Se o preço de venda por M² for: <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="precoVendaM2"
