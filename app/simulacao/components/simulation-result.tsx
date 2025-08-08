@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Calculator, DollarSign, Clock, Users, Settings, Package, Wrench, Car, CheckCircle } from "lucide-react"
-import type { SimulacaoResult } from "@/lib/simulacao-calculator.tsx"
+import type { SimulacaoResult } from "@/lib/simulacao-calculator"
 
 interface SimulationResultProps {
   data: SimulacaoResult
@@ -251,13 +251,19 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-bold">Total Equipe:</span>
-              <span className="font-bold">{formatarMoeda(
-                (preparacaoObra.custoPreparacao || 0) + 
-                (equipeConcretagemAcabamento.custoEquipe || 0) + 
-                (finalizacaoObra.custoFinalizacao || 0) + 
-                (equipeConcretagemAcabamento.custoHEEquipeConcretagem || 0) + 
-                (equipeConcretagemAcabamento.custoHEAcabamento || 0)
-              )} ({formatarPercentual(finalizacaoObra.percentualTotalEquipe || 0)})</span>
+              <span className="font-bold">{(() => {
+                const custoTotalEquipes = (preparacaoObra.custoPreparacao || 0) + 
+                  (equipeConcretagemAcabamento.custoEquipe || 0) + 
+                  (finalizacaoObra.custoFinalizacao || 0) + 
+                  (equipeConcretagemAcabamento.custoHEEquipeConcretagem || 0) + 
+                  (equipeConcretagemAcabamento.custoHEAcabamento || 0);
+                
+                // Calcular percentual correto: custoEquipes / custoTotal
+                const custoTotalGeral = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0);
+                const percentualCorreto = custoTotalGeral > 0 ? (custoTotalEquipes / custoTotalGeral) * 100 : 0;
+                
+                return `${formatarMoeda(custoTotalEquipes)} (${formatarPercentual(percentualCorreto)})`;
+              })()}</span>
             </div>
           </div>
         </CardContent>
@@ -313,14 +319,47 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-8 text-gray-500">
-            Nenhum veículo configurado para esta obra
-          </div>
+          {veiculos.veiculos && veiculos.veiculos.length > 0 ? (
+            <div className="space-y-4">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2">Veículo</th>
+                      <th className="text-center p-2">Tipo</th>
+                      <th className="text-center p-2">Qtd</th>
+                      <th className="text-center p-2">R$/km</th>
+                      <th className="text-center p-2">Distância</th>
+                      <th className="text-center p-2">Dias</th>
+                      <th className="text-right p-2">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {veiculos.veiculos.map((veiculo, index) => (
+                      <tr key={index} className="border-b">
+                        <td className="p-2">{veiculo.veiculo}</td>
+                        <td className="text-center p-2">{veiculo.tipo}</td>
+                        <td className="text-center p-2">{veiculo.quantidade}</td>
+                        <td className="text-center p-2">{formatarMoeda(veiculo.rs_km)}</td>
+                        <td className="text-center p-2">{veiculo.distancia_obra} km</td>
+                        <td className="text-center p-2">{veiculo.dias_obra}</td>
+                        <td className="text-right p-2">{formatarMoeda(veiculo.custo_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              Nenhum veículo configurado para esta obra
+            </div>
+          )}
           <Separator className="my-4" />
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-bold">Total veículos:</span>
-              <span className="font-bold">R$ 0,00 (0.00%)</span>
+              <span className="font-bold">{formatarMoeda(veiculos.totalVeiculos)} ({formatarPercentual(veiculos.percentualTotalVeiculos)})</span>
             </div>
           </div>
         </CardContent>
@@ -517,10 +556,10 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                   <span className="font-bold text-lg text-blue-600">{formatarMoeda(precoVenda.precoVendaPorM2)}/m²</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Preço de venda:</span>
+                  <span className="font-medium">Lucro %:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg">{formatarMoeda(precoVenda.valorTotal)}</span>
+                  <span className="font-bold text-lg text-green-600">{formatarPercentual(precoVenda.valorTotal > 0 ? (precoVenda.resultado1 / precoVenda.valorTotal) * 100 : 0)}</span>
                 </div>
               </div>
             </div>
@@ -530,13 +569,17 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                   <span className="font-medium">Custo + Lucro:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg">{formatarMoeda(precoVenda.valorTotal)}</span>
+                  <span className="font-bold text-lg">{(() => {
+                    const custoTotal = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0);
+                    const lucroValor = precoVenda.resultado1 || 0;
+                    return `${formatarMoeda(custoTotal)} + ${formatarMoeda(lucroValor)}`;
+                  })()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Lucro %:</span>
+                  <span className="font-medium">Total:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg">{formatarPercentual(precoVenda.valorTotal > 0 ? (precoVenda.resultado1 / precoVenda.valorTotal) * 100 : 0)}</span>
+                  <span className="font-bold text-lg text-blue-600">{formatarMoeda(precoVenda.valorTotal)}</span>
                 </div>
               </div>
             </div>
@@ -553,25 +596,42 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="font-bold text-lg text-green-600">{(() => {
-                    const precoUsuarioTotal = precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal;
+                    // USANDO A MESMA LÓGICA DO simulacao-calculator.ts (linhas 829-852)
+                    // Isso garante consistência entre nova simulação e alteração
                     
-                    // Usar o custo total salvo no banco (valor usado na fórmula do preço de venda)
-                    const custoTotalObra = demaisDespesasFixas.custoTotalObra || (precoVenda.valorTotal - precoVenda.resultado1);
+                    const precoVendaTotalManual = precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal;
                     
-                    const margemLucro = precoUsuarioTotal - custoTotalObra;
-                    const percentualMargem = custoTotalObra > 0 ? (margemLucro / custoTotalObra) * 100 : 0;
+                    // Usar o mesmo custo total que o calculador principal
+                    const custoTotalGeral = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0);
                     
-                    console.log("🔍 Debug cálculo margem final:", {
-                      precoUsuarioM2: precoVenda.sePrecoVendaPorM2For,
-                      areaTotal: dadosTecnicos.areaTotal,
-                      precoUsuarioTotal: precoUsuarioTotal,
-                      custoTotalObra: custoTotalObra,
-                      margemLucro: margemLucro,
-                      percentualMargem: percentualMargem,
-                      formula: `(${precoUsuarioTotal} - ${custoTotalObra}) / ${custoTotalObra} × 100 = ${percentualMargem.toFixed(2)}%`
+                    // Usar os mesmos percentuais do resultado calculado
+                    const aliquotaPercentual = custoDerivadosVenda.percentualImpostoSimples || 0;
+                    const comissaoPercentual = custoDerivadosVenda.percentualComissoes || 0;
+                    
+                    // MESMA FÓRMULA do simulacao-calculator.ts:
+                    // Calcular impostos, comissões e outros derivados do preço manual
+                    const impostoSimplesManual = precoVendaTotalManual * (aliquotaPercentual / 100);
+                    const comissoesManual = precoVendaTotalManual * (comissaoPercentual / 100);
+                    
+                    // Margem de lucro = preço total - custos totais - impostos - comissões
+                    const margemLucroManual = precoVendaTotalManual > custoTotalGeral ? 
+                      precoVendaTotalManual - custoTotalGeral - impostoSimplesManual - comissoesManual : 0;
+                    
+                    // Percentual de lucro sobre o preço de venda (igual ao calculador)
+                    const percentualLucroManual = precoVendaTotalManual > 0 ? (margemLucroManual / precoVendaTotalManual) * 100 : 0;
+                    
+                    console.log("🔄 === CÁLCULO PADRONIZADO IGUAL AO simulacao-calculator.ts ===", {
+                      fonte: "simulation-result.tsx usando mesma lógica",
+                      precoVendaTotalManual: `R$ ${precoVendaTotalManual.toFixed(2)}`,
+                      custoTotalGeral: `R$ ${custoTotalGeral.toFixed(2)}`,
+                      impostoSimplesManual: `R$ ${impostoSimplesManual.toFixed(2)} (${aliquotaPercentual}%)`,
+                      comissoesManual: `R$ ${comissoesManual.toFixed(2)} (${comissaoPercentual}%)`,
+                      margemLucroManual: `R$ ${margemLucroManual.toFixed(2)}`,
+                      percentualLucroManual: `${percentualLucroManual.toFixed(2)}%`,
+                      formula: `${precoVendaTotalManual.toFixed(2)} - ${custoTotalGeral.toFixed(2)} - ${impostoSimplesManual.toFixed(2)} - ${comissoesManual.toFixed(2)} = ${margemLucroManual.toFixed(2)}`
                     });
                     
-                    return `${formatarMoeda(margemLucro)} (${formatarPercentual(percentualMargem)})`;
+                    return `${formatarMoeda(margemLucroManual)} (${formatarPercentual(percentualLucroManual)})`;
                   })()}</span>
                 </div>
               </div>

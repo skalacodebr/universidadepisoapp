@@ -37,6 +37,12 @@ interface EquipePreparacao {
   qtd_pessoas: number
 }
 
+interface EquipeFinalizacao {
+  id: number
+  nome: string
+  qtd_pessoas: number
+}
+
 interface Equipamento {
   id: number
   nome: string
@@ -88,6 +94,7 @@ interface SimulacaoFormData {
   prazoConcretagem: string
   equipeAcabamento: string
   prazoAcabamento: string
+  equipeFinalizacao: string
   prazoFinalizacao: string
   equipamentosSelecionados: Array<{
     id: number
@@ -132,6 +139,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     prazoConcretagem: "",
     equipeAcabamento: "",
     prazoAcabamento: "",
+    equipeFinalizacao: "",
     prazoFinalizacao: "",
     equipamentosSelecionados: [],
     frete: "",
@@ -152,6 +160,7 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
   const [equipesConcretagem, setEquipesConcretagem] = useState<EquipeConcretagem[]>([])
   const [equipesAcabamento, setEquipesAcabamento] = useState<EquipeAcabamento[]>([])
   const [equipesPreparacao, setEquipesPreparacao] = useState<EquipePreparacao[]>([])
+  const [equipesFinalizacao, setEquipesFinalizacao] = useState<EquipeFinalizacao[]>([])
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
   const [loadingEquipes, setLoadingEquipes] = useState(true)
   const [loadingEquipamentos, setLoadingEquipamentos] = useState(true)
@@ -215,10 +224,32 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
           setEquipesPreparacao(preparacaoData || [])
         }
 
-        console.log("Estados finais:", {
+        // Buscar equipes de finalização - ordenar por ID
+        console.log("DEBUG - Tentando buscar equipes de finalização...")
+        const { data: finalizacaoData, error: finalizacaoError } = await supabase
+          .from("equipe_finalizacao")
+          .select("id, nome, qtd_pessoas")
+          .order("id")
+
+        console.log("DEBUG - Resultado busca finalização:", { finalizacaoData, finalizacaoError })
+
+        if (finalizacaoError) {
+          console.error("Erro ao buscar equipes de finalização:", finalizacaoError)
+        } else {
+          console.log("Equipes finalização encontradas:", finalizacaoData?.length)
+          setEquipesFinalizacao(finalizacaoData || [])
+        }
+
+        console.log("DEBUG - Estados finais equipes:", {
           concretagem: concretagemData?.length || 0,
           acabamento: acabamentoData?.length || 0,
           preparacao: preparacaoData?.length || 0,
+          finalizacao: finalizacaoData?.length || 0,
+        })
+        
+        console.log("DEBUG - Dados das equipes carregados:", {
+          preparacaoData: preparacaoData?.slice(0, 2), // Primeiros 2 registros
+          finalizacaoData: finalizacaoData?.slice(0, 2), // Primeiros 2 registros
         })
       } catch (error) {
         console.error("Erro geral ao buscar equipes:", error)
@@ -351,6 +382,41 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
     fetchTiposAcabamento()
   }, [isAuthenticated, user])
 
+  // Definir valores padrão após carregar os dados
+  useEffect(() => {
+    console.log("DEBUG - useEffect valores padrão:", {
+      loadingEquipes,
+      equipesPreparacaoLength: equipesPreparacao.length,
+      equipesFinalizacaoLength: equipesFinalizacao.length,
+      equipePreparacaoAtual: formData.equipePreparacao,
+      equipeFinalizacaoAtual: formData.equipeFinalizacao,
+      primeiraEquipePreparacao: equipesPreparacao[0]?.id,
+      primeiraEquipeFinalizacao: equipesFinalizacao[0]?.id
+    })
+    
+    if (!loadingEquipes && equipesPreparacao.length > 0 && equipesFinalizacao.length > 0) {
+      console.log("DEBUG - Condições atendidas, verificando se campos estão vazios...")
+      
+      // Só define os valores padrão se os campos estiverem vazios
+      if (!formData.equipePreparacao && !formData.equipeFinalizacao) {
+        console.log("DEBUG - Definindo valores padrão:", {
+          equipePreparacao: String(equipesPreparacao[0].id),
+          equipeFinalizacao: String(equipesFinalizacao[0].id)
+        })
+        
+        setFormData(prev => ({
+          ...prev,
+          equipePreparacao: String(equipesPreparacao[0].id),
+          equipeFinalizacao: String(equipesFinalizacao[0].id)
+        }))
+      } else {
+        console.log("DEBUG - Campos não estão vazios, não definindo valores padrão")
+      }
+    } else {
+      console.log("DEBUG - Condições não atendidas para definir valores padrão")
+    }
+  }, [loadingEquipes, equipesPreparacao, equipesFinalizacao, formData.equipePreparacao, formData.equipeFinalizacao])
+
   const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
@@ -402,12 +468,13 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
       lancamentoConcreto: "75",
       prazoObra: "8",
       inicioHora: "07:00",
-      equipePreparacao: equipesConcretagem.length > 0 ? String(equipesConcretagem[0].id) : "",
+      equipePreparacao: equipesPreparacao.length > 0 ? String(equipesPreparacao[0].id) : "",
       prazoPreparacao: "3",
       equipeConcretagem: equipesConcretagem.length > 0 ? String(equipesConcretagem[0].id) : "",
       prazoConcretagem: "5",
       equipeAcabamento: equipesAcabamento.length > 0 ? String(equipesAcabamento[0].id) : "",
       prazoAcabamento: "7",
+      equipeFinalizacao: equipesFinalizacao.length > 0 ? String(equipesFinalizacao[0].id) : "",
       prazoFinalizacao: "2",
       equipamentosSelecionados: equipamentosComTeste,
       frete: "2500",
@@ -771,6 +838,34 @@ export function NovaSimulacaoForm({ onSubmit, disabled }: NovaSimulacaoFormProps
                 onChange={(e) => handleChange("prazoPreparacao", e.target.value)}
                 placeholder="Dias para preparação"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="equipeFinalizacao">Equipe de finalização da obra</Label>
+              <Select
+                value={formData.equipeFinalizacao}
+                onValueChange={(value) => handleChange("equipeFinalizacao", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingEquipes ? "Carregando..." : "Selecione uma equipe"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {loadingEquipes ? (
+                    <SelectItem value="loading" disabled>
+                      Carregando equipes...
+                    </SelectItem>
+                  ) : equipesFinalizacao.length > 0 ? (
+                    equipesFinalizacao.map((equipe) => (
+                      <SelectItem key={equipe.id} value={String(equipe.id)}>
+                        {equipe.qtd_pessoas} pessoas
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no-data" disabled>
+                      Nenhuma equipe encontrada
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="prazoFinalizacao">Prazo de finalização da obra (dias)</Label>

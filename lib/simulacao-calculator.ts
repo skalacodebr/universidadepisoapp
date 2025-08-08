@@ -80,6 +80,17 @@ export interface SimulacaoFormData {
 
   // Equipamentos
   equipamentosSelecionados: EquipamentoSelecionado[]
+  
+  // Veículos
+  veiculosSelecionados: Array<{
+    id: number
+    veiculo: string
+    veiculo_id?: number
+    tipo: string
+    quantidade: number
+    selecionado: boolean
+    rs_km?: number
+  }>
 
   // Custos diversos
   frete: string
@@ -556,23 +567,51 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   };
 
   // VEÍCULOS
-  const veiculosComCusto: VeiculoComCusto[] = (veiculosObra ?? [])
-  .map(vo => {
-    const veiculoInfo = (veiculosDisponiveis ?? []).find((vd: any) => vd.veiculo === vo.veiculo);
-    if (!veiculoInfo) return null;
+  const veiculosComCusto: VeiculoComCusto[] = formData.veiculosSelecionados
+  .filter(v => v.selecionado)
+  .map(vs => {
+    // Primeiro tentar usar o rs_km que já vem do veículo selecionado
+    let rs_km = vs.rs_km || 0;
+    
+    // Se não tiver rs_km e tiver veiculo_id, buscar na tabela veiculos
+    if (!rs_km && vs.veiculo_id) {
+      const veiculoInfo = (veiculosDisponiveis ?? []).find((vd: any) => vd.id === vs.veiculo_id);
+      if (veiculoInfo) {
+        rs_km = veiculoInfo.rs_km;
+      }
+    }
+    
+    // Fallback: buscar por nome se ainda não tiver rs_km
+    if (!rs_km) {
+      const veiculoInfo = (veiculosDisponiveis ?? []).find((vd: any) => vd.veiculo === vs.veiculo);
+      if (veiculoInfo) {
+        rs_km = veiculoInfo.rs_km;
+      }
+    }
+    
     const dias_obra = prazoTotal + diasPreparacao + diasFinalizacao;
-    const custo_total = (veiculoInfo.rs_km * distanciaObra * 2 * dias_obra) * (vo.quantidade || 1);
+    // Cálculo: rs/km * distância * 2 (ida e volta) * dias * quantidade
+    const custo_total = (rs_km * distanciaObra * 2 * dias_obra) * (vs.quantidade || 1);
+    
+    console.log(`Cálculo veículo ${vs.veiculo}:`, {
+      rs_km,
+      distanciaObra,
+      dias_obra,
+      quantidade: vs.quantidade,
+      formula: `${rs_km} * ${distanciaObra} * 2 * ${dias_obra} * ${vs.quantidade}`,
+      custo_total
+    });
+    
     return {
-      veiculo: vo.veiculo,
-      tipo: vo.tipo || 'N/A',
-      quantidade: vo.quantidade || 1,
-      rs_km: veiculoInfo.rs_km,
+      veiculo: vs.veiculo,
+      tipo: vs.tipo || 'GERAL',
+      quantidade: vs.quantidade || 1,
+      rs_km,
       distancia_obra: distanciaObra,
       dias_obra,
       custo_total
     };
-  })
-  .filter((v): v is VeiculoComCusto => v !== null);
+  });
 
 
   const totalVeiculos = veiculosComCusto.reduce((acc, v) => acc + v.custo_total, 0);
@@ -965,10 +1004,16 @@ export async function salvarSimulacao(
   userId: string,
   formData: SimulacaoFormData,
   resultado: SimulacaoResult,
-  orcamentoData: any[]
+  orcamentoData: any[],
+  simulacaoId?: number // Parâmetro opcional para edição
 ) {
   console.log('Iniciando salvamento da simulação...');
   console.log('UserID:', userId);
+  console.log('=== DEBUG VEÍCULOS SALVAMENTO ===', {
+    veiculosSelecionados: formData.veiculosSelecionados,
+    qtdVeiculos: formData.veiculosSelecionados?.length || 0,
+    custoVeiculos: resultado.custoVeiculos
+  });
   
   console.log('=== SALVANDO SIMULAÇÃO ===', { 
     custoTotalObra: resultado.demaisDespesasFixas?.custoExecucao + resultado.demaisDespesasFixas?.despesasFixas || 0, 
@@ -979,100 +1024,131 @@ export async function salvarSimulacao(
   });
   
   try {
-    const { data, error } = await supabase
-      .from('obras')
-      .insert([
-        {
-          usuarios_id: parseInt(userId),
-          simulacao: true,
-          nome: formData.nomeObra,
-          construtora: formData.construtora,
-          status: 'SIMULACAO',
-          telefone_responsavel: formData.telefoneContato,
-          nome_contato: formData.nomeContato,
-          endereco: formData.endereco,
-          area_total_metros_quadrados: parseFloat(formData.areaTotal),
-          tipo_acabamento_id: parseInt(formData.tipoAcabamento) || null,
-          distancia_ate_obra: parseFloat(formData.distanciaObra),
-          equipes_concretagem_id: parseInt(formData.equipeConcretagem) || null,
-          equipes_acabamento_id: parseInt(formData.equipeAcabamento) || null,
-          equipes_preparacao_id: parseInt(formData.equipePreparacao) || null,
-          prazo_preparacao_obra: parseInt(formData.prazoPreparacao),
-          prazo_finalizacao_obra: parseInt(formData.prazoFinalizacao),
-          valor_frete: parseFloat(formData.frete),
-          valor_hospedagem: parseFloat(formData.hospedagem),
-          valor_material: parseFloat(formData.material),
-          valor_passagem: parseFloat(formData.passagem),
-          valor_extra: parseFloat(formData.extra),
-          percentual_comissao: parseFloat(formData.comissao) || 0,
-          preco_venda_metro_quadrado: parseFloat(formData.precoVenda),
-          preco_venda_metro_quadrado_calculo: resultado.precoVendaM2,
-          custo_total_obra: (() => {
-            // Somar todos os custos de mão de obra
-            const custoEquipeConcretagemAcabamento = resultado.equipeConcretagemAcabamento?.totalEquipe || 0;
-            const custoPreparacao = resultado.preparacaoObra?.totalEquipe || 0;
-            const custoFinalizacao = resultado.finalizacaoObra?.custoFinalizacao || 0;
-            const custoMaoObraTotal = custoEquipeConcretagemAcabamento + custoPreparacao + custoFinalizacao;
-            
-            const custoEquipamentos = resultado.custoEquipamentos || 0;
-            const custoVeiculos = resultado.custoVeiculos || 0;
-            const custoInsumos = resultado.insumos?.totalInsumos || 0;
-            const outrosCustos = resultado.outrosCustos?.totalOutrosCustos || 0;
-            const despesasFixas = resultado.demaisDespesasFixas?.despesasFixas || 0;
-            const custoTotal = custoMaoObraTotal + custoEquipamentos + custoVeiculos + custoInsumos + outrosCustos + despesasFixas;
-            
-            console.log("💰 === CÁLCULO DO CUSTO TOTAL PARA SALVAR ===", {
-              custoEquipeConcretagemAcabamento: `R$ ${custoEquipeConcretagemAcabamento.toFixed(2)}`,
-              custoPreparacao: `R$ ${custoPreparacao.toFixed(2)}`,
-              custoFinalizacao: `R$ ${custoFinalizacao.toFixed(2)}`,
-              custoMaoObraTotal: `R$ ${custoMaoObraTotal.toFixed(2)}`,
-              custoEquipamentos: `R$ ${custoEquipamentos.toFixed(2)}`,
-              custoVeiculos: `R$ ${custoVeiculos.toFixed(2)}`,
-              custoInsumos: `R$ ${custoInsumos.toFixed(2)}`,
-              outrosCustos: `R$ ${outrosCustos.toFixed(2)}`,
-              despesasFixas: `R$ ${despesasFixas.toFixed(2)}`,
-              custoTotal: `R$ ${custoTotal.toFixed(2)}`,
-              formula: `${custoMaoObraTotal} + ${custoEquipamentos} + ${custoVeiculos} + ${custoInsumos} + ${outrosCustos} + ${despesasFixas} = ${custoTotal}`
-            });
-            
-            return custoTotal;
-          })(),
-          percentual_lucro_desejado: parseFloat(formData.lucroDesejado),
-          valor_total: resultado.valorTotal,
-          lucro_total: resultado.lucroTotal,
-          horas_inicio_concretagem: formData.inicioHora,
-          horas_inicio_acabamento: resultado.dadosTecnicos.inicioAcabamento,
-          equipamentos_selecionados: formData.equipamentosSelecionados,
-          area_por_dia: parseInt(formData.areaPorDia),
-          custo_equipamentos: resultado.custoEquipamentos,
-          custo_mao_obra: resultado.custoMaoObra?.total || 0,
-          custo_materiais: resultado.custoMateriais?.total || 0,
-          custo_insumos: resultado.insumos?.totalInsumos || 0,
-          custo_veiculos: resultado.custoVeiculos,
-          distancia_obra: parseInt(formData.distanciaObra),
-          espessura_piso: parseInt(formData.espessura),
-          lancamento_concreto: formData.lancamentoConcreto,
-          prazo_obra: parseInt(formData.prazoObra),
-          tipo_reforco_estrutural_id: parseInt(formData.reforcoEstrutural) || null,
-          area_por_hora: resultado.dadosTecnicos.areaConcretaPorHora,
-          final_concretagem: resultado.dadosTecnicos.finalConcretagem,
-          final_acabamento: resultado.dadosTecnicos.finalAcabamento,
-          hora_concretagem: Math.round(resultado.dadosTecnicos.horasConcretagem),
-          hora_acabamento: Math.round(resultado.dadosTecnicos.horasAcabamento),
-          sobreposicao_ca: Math.round(resultado.dadosTecnicos.sobreposicaoCA),
-          valor_locacao_veiculos: parseFloat(formData.locacaoVeiculo),
-          valor_locacao_equipamento: parseFloat(formData.locacaoEquipamento),
-          custo_horas_extra_concretagem: resultado.equipeConcretagemAcabamento.custoHEEquipeConcretagem,
-          custo_horas_extra_acabamento: resultado.equipeConcretagemAcabamento.custoHEAcabamento,
-          custo_total_horas_extras: resultado.equipeConcretagemAcabamento.custoHEEquipeConcretagem + resultado.equipeConcretagemAcabamento.custoHEAcabamento,
-          horas_extra_acabamento: Math.round(resultado.equipeConcretagemAcabamento.horaExtraEquipeAcabamento),
-          horas_extra_concretagem: Math.round(resultado.equipeConcretagemAcabamento.horasExtraEquipeConcretagem),
-          custo_finalizacao: resultado.finalizacaoObra.custoFinalizacao,
-          custo_preparacao: resultado.preparacaoObra.custoPreparacao
-        },
-      ])
-      .select()
-      .single();
+    const dadosSimulacao = {
+      usuarios_id: parseInt(userId),
+      simulacao: true,
+      nome: formData.nomeObra,
+      construtora: formData.construtora,
+      status: 'SIMULACAO',
+      telefone_responsavel: formData.telefoneContato,
+      nome_contato: formData.nomeContato,
+      endereco: formData.endereco,
+      area_total_metros_quadrados: parseFloat(formData.areaTotal),
+      tipo_acabamento_id: parseInt(formData.tipoAcabamento) || null,
+      distancia_ate_obra: parseFloat(formData.distanciaObra),
+      equipes_concretagem_id: parseInt(formData.equipeConcretagem) || null,
+      equipes_acabamento_id: parseInt(formData.equipeAcabamento) || null,
+      equipes_preparacao_id: parseInt(formData.equipePreparacao) || null,
+      prazo_preparacao_obra: parseInt(formData.prazoPreparacao),
+      prazo_finalizacao_obra: parseInt(formData.prazoFinalizacao),
+      valor_frete: parseFloat(formData.frete),
+      valor_hospedagem: parseFloat(formData.hospedagem),
+      valor_material: parseFloat(formData.material),
+      valor_passagem: parseFloat(formData.passagem),
+      valor_extra: parseFloat(formData.extra),
+      percentual_comissao: parseFloat(formData.comissao) || 0,
+      preco_venda_metro_quadrado: parseFloat(formData.precoVenda),
+      preco_venda_metro_quadrado_calculo: resultado.precoVendaM2,
+      custo_total_obra: (() => {
+        // Somar todos os custos de mão de obra
+        const custoEquipeConcretagemAcabamento = resultado.equipeConcretagemAcabamento?.totalEquipe || 0;
+        const custoPreparacao = resultado.preparacaoObra?.totalEquipe || 0;
+        const custoFinalizacao = resultado.finalizacaoObra?.custoFinalizacao || 0;
+        const custoMaoObraTotal = custoEquipeConcretagemAcabamento + custoPreparacao + custoFinalizacao;
+        
+        const custoEquipamentos = resultado.custoEquipamentos || 0;
+        const custoVeiculos = resultado.custoVeiculos || 0;
+        const custoInsumos = resultado.insumos?.totalInsumos || 0;
+        const outrosCustos = resultado.outrosCustos?.totalOutrosCustos || 0;
+        const despesasFixas = resultado.demaisDespesasFixas?.despesasFixas || 0;
+        const custoTotal = custoMaoObraTotal + custoEquipamentos + custoVeiculos + custoInsumos + outrosCustos + despesasFixas;
+        
+        console.log("💰 === CÁLCULO DO CUSTO TOTAL PARA SALVAR ===", {
+          custoEquipeConcretagemAcabamento: `R$ ${custoEquipeConcretagemAcabamento.toFixed(2)}`,
+          custoPreparacao: `R$ ${custoPreparacao.toFixed(2)}`,
+          custoFinalizacao: `R$ ${custoFinalizacao.toFixed(2)}`,
+          custoMaoObraTotal: `R$ ${custoMaoObraTotal.toFixed(2)}`,
+          custoEquipamentos: `R$ ${custoEquipamentos.toFixed(2)}`,
+          custoVeiculos: `R$ ${custoVeiculos.toFixed(2)}`,
+          custoInsumos: `R$ ${custoInsumos.toFixed(2)}`,
+          outrosCustos: `R$ ${outrosCustos.toFixed(2)}`,
+          despesasFixas: `R$ ${despesasFixas.toFixed(2)}`,
+          custoTotal: `R$ ${custoTotal.toFixed(2)}`,
+          formula: `${custoMaoObraTotal} + ${custoEquipamentos} + ${custoVeiculos} + ${custoInsumos} + ${outrosCustos} + ${despesasFixas} = ${custoTotal}`
+        });
+        
+        return custoTotal;
+      })(),
+      percentual_lucro_desejado: parseFloat(formData.lucroDesejado),
+      valor_total: resultado.valorTotal,
+      lucro_total: resultado.lucroTotal,
+      horas_inicio_concretagem: formData.inicioHora,
+      horas_inicio_acabamento: resultado.dadosTecnicos.inicioAcabamento,
+      equipamentos_selecionados: formData.equipamentosSelecionados,
+      veiculos_selecionados: (() => {
+        console.log("=== SALVANDO VEÍCULOS NO BANCO ===", {
+          veiculosSelecionados: formData.veiculosSelecionados,
+          tipo: typeof formData.veiculosSelecionados,
+          ehArray: Array.isArray(formData.veiculosSelecionados),
+          tamanho: formData.veiculosSelecionados?.length || 0
+        });
+        return formData.veiculosSelecionados;
+      })(),
+      area_por_dia: parseInt(formData.areaPorDia),
+      custo_equipamentos: resultado.custoEquipamentos,
+      custo_mao_obra: resultado.custoMaoObra?.total || 0,
+      custo_materiais: resultado.custoMateriais?.total || 0,
+      custo_insumos: resultado.insumos?.totalInsumos || 0,
+      custo_veiculos: resultado.custoVeiculos,
+      distancia_obra: parseInt(formData.distanciaObra),
+      espessura_piso: parseInt(formData.espessura),
+      lancamento_concreto: formData.lancamentoConcreto,
+      prazo_obra: parseInt(formData.prazoObra),
+      tipo_reforco_estrutural_id: parseInt(formData.reforcoEstrutural) || null,
+      area_por_hora: resultado.dadosTecnicos.areaConcretaPorHora,
+      final_concretagem: resultado.dadosTecnicos.finalConcretagem,
+      final_acabamento: resultado.dadosTecnicos.finalAcabamento,
+      hora_concretagem: Math.round(resultado.dadosTecnicos.horasConcretagem),
+      hora_acabamento: Math.round(resultado.dadosTecnicos.horasAcabamento),
+      sobreposicao_ca: Math.round(resultado.dadosTecnicos.sobreposicaoCA),
+      valor_locacao_veiculos: parseFloat(formData.locacaoVeiculo),
+      valor_locacao_equipamento: parseFloat(formData.locacaoEquipamento),
+      custo_horas_extra_concretagem: resultado.equipeConcretagemAcabamento.custoHEEquipeConcretagem,
+      custo_horas_extra_acabamento: resultado.equipeConcretagemAcabamento.custoHEAcabamento,
+      custo_total_horas_extras: resultado.equipeConcretagemAcabamento.custoHEEquipeConcretagem + resultado.equipeConcretagemAcabamento.custoHEAcabamento,
+      horas_extra_acabamento: Math.round(resultado.equipeConcretagemAcabamento.horaExtraEquipeAcabamento),
+      horas_extra_concretagem: Math.round(resultado.equipeConcretagemAcabamento.horasExtraEquipeConcretagem),
+      custo_finalizacao: resultado.finalizacaoObra.custoFinalizacao,
+      custo_preparacao: resultado.preparacaoObra.custoPreparacao
+    };
+
+    let data, error;
+
+    if (simulacaoId) {
+      // Modo edição: UPDATE
+      console.log(`Atualizando simulação existente com ID: ${simulacaoId}`);
+      const resultado = await supabase
+        .from('obras')
+        .update(dadosSimulacao)
+        .eq('id', simulacaoId)
+        .eq('usuarios_id', parseInt(userId)) // Garantir que só edite suas próprias simulações
+        .select()
+        .single();
+      
+      data = resultado.data;
+      error = resultado.error;
+    } else {
+      // Modo criação: INSERT
+      console.log('Criando nova simulação');
+      const resultado = await supabase
+        .from('obras')
+        .insert([dadosSimulacao])
+        .select()
+        .single();
+      
+      data = resultado.data;
+      error = resultado.error;
+    }
 
     if (error) {
       console.error('Erro detalhado ao salvar simulação:', {

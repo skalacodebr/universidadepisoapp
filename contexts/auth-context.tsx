@@ -76,39 +76,125 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     rememberMe = false,
   ): Promise<{ success: boolean; message: string }> => {
     const supabase = getSupabaseClient(); // Pega cliente sem token
+    console.log("🔐 === INÍCIO DO PROCESSO DE LOGIN ===", {
+      email,
+      rememberMe,
+      timestamp: new Date().toISOString(),
+      supabaseUrl: supabase.supabaseUrl,
+      supabaseKey: supabase.supabaseKey?.substring(0, 20) + "...",
+    });
+    
     try {
-      // 1. Sua lógica de login original
+      // 1. Buscar usuário no banco
+      console.log("📋 Buscando usuário no banco de dados...");
       const { data, error } = await supabase.from("usuarios").select("*").eq("email", email).single()
-      if (error || !data) { return { success: false, message: "Usuário não encontrado" } }
-      if (!data.status) { return { success: false, message: "Usuário inativo." } }
+      
+      console.log("📊 Resultado da busca no banco:", {
+        found: !!data,
+        error: error?.message || null,
+        errorCode: error?.code || null,
+        errorDetails: error?.details || null,
+        userStatus: data?.status || null,
+        userId: data?.id || null,
+        userName: data?.nome || null
+      });
+      
+      if (error || !data) { 
+        console.log("❌ Usuário não encontrado ou erro na consulta");
+        return { success: false, message: `Usuário não encontrado${error ? `: ${error.message}` : ""}` }
+      }
+      
+      if (!data.status) { 
+        console.log("⚠️ Usuário encontrado mas está inativo");
+        return { success: false, message: "Usuário inativo." }
+      }
+      
+      // 2. Validar senha
+      console.log("🔑 Validando senha...");
       const hashedPassword = await hashSHA256(password)
-      if (hashedPassword !== data.senha) { return { success: false, message: "Senha incorreta" } }
+      const senhaCorreta = hashedPassword === data.senha;
+      
+      console.log("🔍 Resultado da validação de senha:", {
+        senhaCorreta,
+        hashGerado: hashedPassword.substring(0, 10) + "...",
+        hashArmazenado: data.senha?.substring(0, 10) + "..."
+      });
+      
+      if (!senhaCorreta) { 
+        console.log("❌ Senha incorreta");
+        return { success: false, message: "Senha incorreta" }
+      }
 
-      // 2. Chame a Edge Function
+      // 3. Obter token customizado
+      console.log("🎟️ Obtendo token customizado via Edge Function...");
       const { data: tokenData, error: tokenError } = await supabase.functions.invoke('get-custom-token', {
         body: { userId: data.id, email: data.email },
       })
+      
+      console.log("🔐 Resultado da obtenção do token:", {
+        tokenObtido: !!tokenData?.token,
+        tokenError: tokenError?.message || null,
+        tokenLength: tokenData?.token?.length || 0,
+        tokenStart: tokenData?.token?.substring(0, 20) + "..." || null
+      });
+      
       if (tokenError || !tokenData.token) {
-        console.error("Erro ao obter token customizado:", tokenError)
-        return { success: false, message: "Não foi possível iniciar a sessão segura." }
+        console.error("❌ Erro ao obter token customizado:", tokenError)
+        return { success: false, message: `Não foi possível iniciar a sessão segura: ${tokenError?.message || 'Token não retornado'}` }
       }
+      
       const { token: customToken } = tokenData
       
-      // 3. Armazene o usuário e o token
+      // 4. Armazenar dados na sessão
+      console.log("💾 Armazenando dados na sessão...");
       const storage = rememberMe ? localStorage : sessionStorage
-      storage.setItem("custom_token", customToken)
-      const { senha, ...userData } = data
-      storage.setItem("user", JSON.stringify(userData))
+      const storageType = rememberMe ? "localStorage" : "sessionStorage";
+      
+      try {
+        storage.setItem("custom_token", customToken)
+        const { senha, ...userData } = data
+        storage.setItem("user", JSON.stringify(userData))
+        
+        console.log("✅ Dados armazenados com sucesso:", {
+          storageType,
+          userDataKeys: Object.keys(userData),
+          tokenArmazenado: !!storage.getItem("custom_token"),
+          userArmazenado: !!storage.getItem("user")
+        });
+      } catch (storageError) {
+        console.error("❌ Erro ao armazenar dados:", storageError);
+        return { success: false, message: "Erro ao salvar dados da sessão" }
+      }
 
-      // 4. Força a recriação do cliente com o novo token
-      updateSupabaseClientToken(customToken);
-      setUser(userData as CustomUser)
-      setIsAuthenticated(true)
+      // 5. Atualizar cliente Supabase e estado
+      console.log("🔄 Atualizando cliente Supabase e estado da aplicação...");
+      try {
+        updateSupabaseClientToken(customToken);
+        const { senha, ...userData } = data
+        setUser(userData as CustomUser)
+        setIsAuthenticated(true)
+        
+        console.log("✅ Estado atualizado com sucesso:", {
+          userSet: true,
+          authenticated: true,
+          finalUserId: userData.id,
+          finalUserName: userData.nome
+        });
+      } catch (stateError) {
+        console.error("❌ Erro ao atualizar estado:", stateError);
+        return { success: false, message: "Erro ao atualizar estado da aplicação" }
+      }
 
+      console.log("🎉 === LOGIN CONCLUÍDO COM SUCESSO ===");
       return { success: true, message: "Login realizado com sucesso" }
-    } catch (error) {
-      console.error("Erro no login:", error)
-      return { success: false, message: "Erro ao fazer login. Tente novamente." }
+    } catch (error: any) {
+      console.error("💥 === ERRO CRÍTICO NO LOGIN ===", {
+        errorMessage: error.message,
+        errorName: error.name,
+        errorStack: error.stack,
+        timestamp: new Date().toISOString()
+      });
+      return { success: false, message: `Erro crítico: ${error.message}` }
     }
   }
 

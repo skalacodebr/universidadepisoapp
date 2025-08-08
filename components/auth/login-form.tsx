@@ -32,10 +32,8 @@ export function LoginForm() {
       const result = await login(email, password, rememberMe)
 
       if (result.success) {
-        // Redirect to dashboard on successful login
         router.push("/dashboard")
       } else {
-        // Show error message from the login result
         setError(result.message)
       }
     } catch (error: any) {
@@ -47,14 +45,14 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-lg border-0 shadow-lg">
-      <CardHeader className="space-y-3 pb-2">
-        <CardTitle className="text-3xl font-bold text-center">Login</CardTitle>
-        <CardDescription className="text-center text-base whitespace-nowrap">
+    <Card className="w-full max-w-lg border-0 shadow-lg mx-4 sm:mx-0">
+      <CardHeader className="space-y-3 pb-2 px-4 sm:px-6">
+        <CardTitle className="text-2xl sm:text-3xl font-bold text-center">Login</CardTitle>
+        <CardDescription className="text-center text-sm sm:text-base px-2">
           Entre com seu email e senha para acessar sua conta
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         {successMessage && (
           <Alert className="mb-4 bg-green-50 text-green-700 border-green-200">
             <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -105,14 +103,14 @@ export function LoginForm() {
                 />
                 <Label
                   htmlFor="remember-me"
-                  className="text-sm text-gray-500 font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                  className="text-xs sm:text-sm text-gray-500 font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                 >
                   Lembrar-me
                 </Label>
               </div>
               <Link
                 href="/recuperar-senha"
-                className="text-sm text-gray-500 hover:text-[#007EA3] hover:underline transition-colors"
+                className="text-xs sm:text-sm text-gray-500 hover:text-[#007EA3] hover:underline transition-colors whitespace-nowrap"
               >
                 Esqueci minha senha
               </Link>
@@ -120,15 +118,15 @@ export function LoginForm() {
           </div>
           <Button
             type="submit"
-            className="w-full bg-[#202F51] hover:bg-[#2a3b68] text-white py-6 text-lg"
+            className="w-full bg-[#202F51] hover:bg-[#2a3b68] text-white py-4 sm:py-6 text-base sm:text-lg"
             disabled={isLoading}
           >
             {isLoading ? "Entrando..." : "Entrar"}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="flex justify-center">
-        <p className="text-base text-center text-gray-500">
+      <CardFooter className="flex justify-center px-4 sm:px-6">
+        <p className="text-sm sm:text-base text-center text-gray-500">
           Não tem uma conta?{" "}
           <Link href="/cadastro" className="text-[#007EA3] hover:underline font-medium">
             Cadastre-se

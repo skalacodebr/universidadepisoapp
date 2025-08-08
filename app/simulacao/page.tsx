@@ -14,7 +14,7 @@ import { VeiculosObra } from "./components/veiculos-obra"
 import { EquipamentosObra } from "./components/equipamentos-obra"
 import { useSimulacoes } from "./hooks/useSimulacoes"
 import { useSimulacaoFilters } from "./hooks/useSimulacaoFilters"
-import type { SimulacaoResult as SimulacaoResultType } from "@/lib/simulacao-calculator.tsx"
+import type { SimulacaoResult as SimulacaoResultType } from "@/lib/simulacao-calculator"
 import type { SimulacaoItem } from "./hooks/useSimulacoes"
 import { supabase } from "@/lib/supabase"
 import Link from "next/link"
@@ -50,6 +50,12 @@ const revenueRanges = [
 
 // Função adaptadora para converter formato antigo para novo formato detalhado
 function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalNome: string = 'N/A'): SimulacaoResultType {
+  console.log('=== ADAPTADOR CHAMADO ===', {
+    obraId: obra.id,
+    temVeiculosSelecionados: !!obra.veiculos_selecionados,
+    custoVeiculos: obra.custo_veiculos
+  });
+  
   // Calcular o custo de preparação
   const custoPreparacao = obra.pessoasPreparacao * 1373.47 * (obra.prazo_preparacao_obra || 0);
   
@@ -140,7 +146,59 @@ function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalN
       })()
     },
     veiculos: {
-      veiculos: oldResult.veiculosDetalhados || [],
+      veiculos: (() => {
+        try {
+          console.log('=== DEBUG VEÍCULOS NA VISUALIZAÇÃO ===', {
+            veiculos_selecionados_raw: obra.veiculos_selecionados,
+            tipo: typeof obra.veiculos_selecionados,
+            custo_veiculos: obra.custo_veiculos,
+            obra_id: obra.id,
+            obraCompleta: obra
+          });
+          
+          let veiculos = obra.veiculos_selecionados;
+          
+          // Se for uma string, tentar fazer parse
+          if (typeof veiculos === 'string') {
+            veiculos = JSON.parse(veiculos);
+          }
+          
+          // Se não for array ou estiver vazio
+          if (!Array.isArray(veiculos) || veiculos.length === 0) {
+            console.log('Veículos não encontrados em veiculos_selecionados');
+            return [];
+          }
+          
+          // Calcular detalhes para cada veículo
+          const distanciaObra = obra.distancia_obra || 0;
+          const diasObra = (obra.prazo_obra || 0) + (obra.prazo_preparacao_obra || 0) + (obra.prazo_finalizacao_obra || 0);
+          
+          console.log('Processando veículos salvos:', veiculos);
+          
+          return veiculos.map((v: any) => {
+            // Os veículos já têm o rs_km salvo, só precisamos calcular o custo se não existir
+            const rs_km = v.rs_km || 0;
+            const quantidade = v.quantidade || 1;
+            const custo_total = rs_km * distanciaObra * 2 * diasObra * quantidade;
+            
+            const veiculoProcessado = {
+              veiculo: v.veiculo || 'Veículo',
+              tipo: v.tipo || 'GERAL',
+              quantidade: quantidade,
+              rs_km: rs_km,
+              distancia_obra: distanciaObra,
+              dias_obra: diasObra,
+              custo_total: custo_total
+            };
+            
+            console.log('Veículo processado:', veiculoProcessado);
+            return veiculoProcessado;
+          });
+        } catch (error) {
+          console.error('Erro ao processar veículos:', error);
+          return [];
+        }
+      })(),
       totalVeiculos: obra.custo_veiculos || 0,
       percentualTotalVeiculos: oldResult.valorTotal > 0 ? ((obra.custo_veiculos || 0) / oldResult.valorTotal) * 100 : 0
     },

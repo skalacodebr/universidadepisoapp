@@ -19,6 +19,17 @@ import { useEffect } from "react"
 import type { SimulacaoFormData } from "@/lib/simulacao-calculator"
 import { processarSimulacao, salvarSimulacao } from "@/lib/simulacao-calculator"
 
+// Tipos para componentes
+interface VeiculoSelecionado { 
+  id: number; 
+  veiculo: string; 
+  veiculo_id?: number;
+  tipo: string; 
+  quantidade: number; 
+  selecionado: boolean;
+  rs_km?: number;
+}
+
 
 interface EquipeConcretagem {
   id: number
@@ -33,6 +44,12 @@ interface EquipeAcabamento {
 }
 
 interface EquipePreparacao {
+  id: number
+  nome: string
+  qtd_pessoas: number
+}
+
+interface EquipeFinalizacao {
   id: number
   nome: string
   qtd_pessoas: number
@@ -72,7 +89,7 @@ export default function NovaSimulacaoPage() {
     distanciaObra: "",
     lancamentoConcreto: "",
     prazoObra: "",
-    inicioHora: "",
+    inicioHora: "08:00",
     equipePreparacao: "",
     prazoPreparacao: "",
     equipeConcretagem: "",
@@ -82,6 +99,7 @@ export default function NovaSimulacaoPage() {
     equipeFinalizacao: "",
     prazoFinalizacao: "",
     equipamentos: [] as EquipamentoSelecionado[],
+    veiculos: [] as VeiculoSelecionado[],
     frete: "",
     hospedagem: "",
     locacaoEquipamento: "",
@@ -89,7 +107,7 @@ export default function NovaSimulacaoPage() {
     material: "",
     passagem: "",
     extra: "",
-    comissao: "5",
+    comissao: "0",
     precoVenda: "",
     lucroDesejado: "",
   })
@@ -101,9 +119,12 @@ export default function NovaSimulacaoPage() {
   const [equipesConcretagem, setEquipesConcretagem] = useState<EquipeConcretagem[]>([])
   const [equipesAcabamento, setEquipesAcabamento] = useState<EquipeAcabamento[]>([])
   const [equipesPreparacao, setEquipesPreparacao] = useState<EquipePreparacao[]>([])
+  const [equipesFinalizacao, setEquipesFinalizacao] = useState<EquipeFinalizacao[]>([])
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
+  const [veiculos, setVeiculos] = useState<{ id: number; veiculo: string; rs_km: number }[]>([])
   const [loadingEquipes, setLoadingEquipes] = useState(true)
   const [loadingEquipamentos, setLoadingEquipamentos] = useState(true)
+  const [loadingVeiculos, setLoadingVeiculos] = useState(true)
   const [reforcoOptions, setReforcoOptions] = useState<{ id: number; nome: string }[]>([])
   const [loadingReforco, setLoadingReforco] = useState(true)
   const [acabamentoOptions, setAcabamentoOptions] = useState<{ id: number; nome: string }[]>([]);
@@ -179,12 +200,20 @@ export default function NovaSimulacaoPage() {
           console.log("Equipes preparação encontradas:", preparacaoData?.length)
           setEquipesPreparacao(preparacaoData || [])
         }
+
+        // Buscar equipes de finalização - ordenar por ID
+        const { data: finalizacaoData, error: finalizacaoError } = await supabase
+          .from("equipes_finalizacao")
+          .select("id, nome, qtd_pessoas")
+          .order("id")
+
+        if (finalizacaoError) {
+          console.error("Erro ao buscar equipes de finalização:", finalizacaoError)
+        } else {
+          console.log("Equipes finalização encontradas:", finalizacaoData?.length)
+          setEquipesFinalizacao(finalizacaoData || [])
+        }
   
-        console.log("Estados finais:", {
-          concretagem: concretagemData?.length || 0,
-          acabamento: acabamentoData?.length || 0,
-          preparacao: preparacaoData?.length || 0,
-        })
       } catch (error) {
         console.error("Erro geral ao buscar equipes:", error)
       } finally {
@@ -243,6 +272,86 @@ export default function NovaSimulacaoPage() {
     fetchEquipamentos()
   }, [isAuthenticated, user])
 
+  // Buscar veículos do banco de dados
+  useEffect(() => {
+    const fetchVeiculos = async () => {
+      try {
+        setLoadingVeiculos(true)
+
+        // Verificar se o usuário está autenticado antes de fazer as queries
+        if (!isAuthenticated || !user) {
+          console.log("Usuário não autenticado, pulando query de veículos")
+          setLoadingVeiculos(false)
+          return
+        }
+
+        console.log("Buscando veículos...")
+
+        // Buscar veículos do usuário da tabela obras_veiculos_simulacao
+        const { data: veiculosUsuario, error: veiculosUsuarioError } = await supabase
+          .from("obras_veiculos_simulacao")
+          .select("*")
+          .eq("userid", user.id)
+          .order("created_at", { ascending: false })
+
+        if (veiculosUsuarioError) {
+          console.error("Erro ao buscar veículos do usuário:", veiculosUsuarioError)
+        }
+
+        // Buscar dados completos dos veículos (para obter rs_km)
+        const { data: veiculosCompletos, error: veiculosCompletosError } = await supabase
+          .from("veiculos")
+          .select("id, veiculo, rs_km")
+          .order("veiculo")
+
+        if (veiculosCompletosError) {
+          console.error("Erro ao buscar dados dos veículos:", veiculosCompletosError)
+        }
+
+        // Criar mapa de veículos para acesso rápido
+        const veiculosMap = new Map(veiculosCompletos?.map(v => [v.id, v]) || [])
+
+        // Combinar dados: usar veículos do usuário como base
+        if (veiculosUsuario && veiculosUsuario.length > 0) {
+          console.log("Veículos do usuário encontrados:", veiculosUsuario.length)
+          
+          const veiculosIniciais: VeiculoSelecionado[] = veiculosUsuario.map((vu) => {
+            // Buscar dados completos do veículo usando veiculo_id ou nome
+            let veiculoCompleto = null
+            if (vu.veiculo_id) {
+              veiculoCompleto = veiculosMap.get(vu.veiculo_id)
+            } else {
+              // Fallback: buscar por nome se não tiver veiculo_id
+              veiculoCompleto = veiculosCompletos?.find(v => v.veiculo === vu.veiculo)
+            }
+
+            return {
+              id: vu.veiculo_id || vu.id,
+              veiculo: vu.veiculo,
+              veiculo_id: vu.veiculo_id,
+              tipo: vu.tipo || "GERAL",
+              quantidade: vu.quantidade || 1,
+              selecionado: false,
+              rs_km: veiculoCompleto?.rs_km || 0
+            }
+          })
+
+          setFormData((prev) => ({ ...prev, veiculos: veiculosIniciais }))
+        } else {
+          // Se não houver veículos do usuário, inicializar com array vazio
+          console.log("Nenhum veículo do usuário encontrado")
+          setFormData((prev) => ({ ...prev, veiculos: [] }))
+        }
+      } catch (error) {
+        console.error("Erro geral ao buscar veículos:", error)
+      } finally {
+        setLoadingVeiculos(false)
+      }
+    }
+
+    fetchVeiculos()
+  }, [isAuthenticated, user])
+
   // Buscar reforço estrutural do banco de dados
   useEffect(() => {
     const fetchReforco = async () => {
@@ -299,6 +408,20 @@ export default function NovaSimulacaoPage() {
     fetchReforco();
     fetchAcabamento();
   }, [isAuthenticated, user]);
+
+  // Definir valores padrão para equipes de preparação e finalização (apenas uma vez)
+  const [valoresPadraoDefinidos, setValoresPadraoDefinidos] = useState(false)
+  
+  useEffect(() => {
+    if (!loadingEquipes && equipesPreparacao.length > 0 && equipesFinalizacao.length > 0 && !valoresPadraoDefinidos) {
+      setFormData(prev => ({
+        ...prev,
+        equipePreparacao: prev.equipePreparacao || "1",
+        equipeFinalizacao: prev.equipeFinalizacao || "1"
+      }))
+      setValoresPadraoDefinidos(true)
+    }
+  }, [loadingEquipes, equipesPreparacao, equipesFinalizacao, valoresPadraoDefinidos])
 
   // Carregar dados da simulação para refazer
   useEffect(() => {
@@ -418,6 +541,34 @@ export default function NovaSimulacaoPage() {
               console.error('Erro ao processar equipamentos:', e);
             }
           }
+
+          // Carregar veículos selecionados
+          console.log('=== DEBUG CARREGAMENTO VEÍCULOS ===', {
+            obra_veiculos_selecionados: obra.veiculos_selecionados,
+            tipo: typeof obra.veiculos_selecionados
+          });
+          
+          if (obra.veiculos_selecionados) {
+            try {
+              const veiculosSelecionados = typeof obra.veiculos_selecionados === 'string' 
+                ? JSON.parse(obra.veiculos_selecionados) 
+                : obra.veiculos_selecionados;
+              
+              console.log('=== VEÍCULOS PARSEADOS ===', veiculosSelecionados);
+              
+              if (Array.isArray(veiculosSelecionados)) {
+                setFormData(prev => ({
+                  ...prev,
+                  veiculos: prev.veiculos.map(v => ({
+                    ...v,
+                    selecionado: veiculosSelecionados.some(sel => sel.id === v.id)
+                  }))
+                }));
+              }
+            } catch (e) {
+              console.error('Erro ao processar veículos:', e);
+            }
+          }
         }
       } catch (error) {
         console.error('Erro ao carregar simulação para refazer:', error);
@@ -428,7 +579,21 @@ export default function NovaSimulacaoPage() {
   }, [refazerId, isAuthenticated, user, supabase, reforcoOptions, acabamentoOptions, equipamentos, loadingReforco, loadingAcabamento, loadingEquipamentos]);
 
   const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+    // Log temporário para debug
+    if (field === "lucroDesejado" || field === "precoVenda") {
+      console.log(`DEBUG - Mudando campo ${field}:`, value)
+    }
+    
+    setFormData((prev) => {
+      // Log para detectar mudanças não intencionais
+      if (field !== "locacaoEquipamento" && prev.locacaoEquipamento !== formData.locacaoEquipamento) {
+        console.log(`DEBUG - ALERTA! locacaoEquipamento mudou quando alterando ${field}`)
+        console.log("Valor anterior:", prev.locacaoEquipamento)
+        console.log("Valor atual no formData:", formData.locacaoEquipamento)
+      }
+      
+      return { ...prev, [field]: value }
+    })
   }
 
   const handleEquipamentoChange = (equipamentoId: number, checked: boolean) => {
@@ -453,11 +618,22 @@ export default function NovaSimulacaoPage() {
     amanha.setDate(amanha.getDate() + 1)
 
     // Selecionar alguns equipamentos aleatoriamente
-    const equipamentosComTeste = formData.equipamentos.map((eq, index) => ({
-      ...eq,
-      selecionado: index < 3, // Seleciona os primeiros 3 equipamentos
-      quantidade: Math.floor(Math.random() * 3) + 1, // Quantidade entre 1 e 3
-    }))
+    const equipamentosComTeste = formData.equipamentos && formData.equipamentos.length > 0 
+      ? formData.equipamentos.map((eq, index) => ({
+          ...eq,
+          selecionado: index < 3, // Seleciona os primeiros 3 equipamentos
+          quantidade: Math.floor(Math.random() * 3) + 1, // Quantidade entre 1 e 3
+        }))
+      : []
+    
+    // Selecionar alguns veículos para teste
+    const veiculosComTeste = formData.veiculos && formData.veiculos.length > 0
+      ? formData.veiculos.map((v, index) => ({
+          ...v,
+          selecionado: index < 2, // Seleciona os primeiros 2 veículos
+          quantidade: index === 0 ? 2 : 1, // Primeiro veículo com 2 unidades, segundo com 1
+        }))
+      : []
 
     setFormData({
       nomeObra: "Obra Teste - Shopping Center",
@@ -484,6 +660,7 @@ export default function NovaSimulacaoPage() {
       equipeFinalizacao: equipesPreparacao.length > 0 ? String(equipesPreparacao[0].id) : "",
       prazoFinalizacao: "2",
       equipamentos: equipamentosComTeste,
+      veiculos: veiculosComTeste,
       frete: "2500",
       hospedagem: "1800",
       locacaoEquipamento: "3200",
@@ -520,10 +697,20 @@ export default function NovaSimulacaoPage() {
 
       // Filtrar apenas equipamentos selecionados para envio
       const equipamentosSelecionados = formData.equipamentos.filter((eq) => eq.selecionado)
+      
+      // Filtrar apenas veículos selecionados para envio
+      const veiculosSelecionados = formData.veiculos.filter((v) => v.selecionado)
+      
+      console.log("=== DEBUG VEÍCULOS ANTES DO ENVIO ===", {
+        veiculosNoFormData: formData.veiculos,
+        veiculosSelecionados: veiculosSelecionados,
+        qtdSelecionados: veiculosSelecionados.length
+      })
 
       const dadosParaEnvio: SimulacaoFormData = {
         ...formData,
         equipamentosSelecionados,
+        veiculosSelecionados,
       }
 
       console.log("Submetendo simulação com dados:", JSON.stringify(dadosParaEnvio, null, 2))
@@ -552,8 +739,8 @@ export default function NovaSimulacaoPage() {
 
         // Tentar salvar a simulação
         try {
-          await salvarSimulacao(user.id, dadosParaEnvio, resultado, [])
-          alert("Simulação criada com sucesso!")
+          await salvarSimulacao(user.id, dadosParaEnvio, resultado, [], refazerId ? parseInt(refazerId) : undefined)
+          alert(refazerId ? "Simulação atualizada com sucesso!" : "Simulação criada com sucesso!")
           router.push("/simulacao")
         } catch (saveError: any) {
           console.error("Erro ao salvar simulação:", saveError)
@@ -595,43 +782,45 @@ export default function NovaSimulacaoPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto py-4 px-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-2 sm:gap-0">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" asChild>
             <Link href="/simulacao">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <h1 className="text-2xl font-bold tracking-tight">Nova Simulação</h1>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Nova Simulação</h1>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Botão de teste - só aparece em desenvolvimento */}
-        <div className="flex justify-end">
+        <div className="flex justify-center sm:justify-end">
           <Button
             type="button"
             variant="outline"
             onClick={preencherDadosTeste}
-            className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100"
+            className="bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100 w-full sm:w-auto"
           >
             <TestTube className="h-4 w-4 mr-2" />
-            Preencher Dados de Teste
+            <span className="hidden sm:inline">Preencher Dados de Teste</span>
+            <span className="sm:hidden">Dados de Teste</span>
           </Button>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid grid-cols-4 gap-2">
-            <TabsTrigger value="informacoes-gerais">Informações Gerais</TabsTrigger>
-            <TabsTrigger value="equipes-prazos">Equipes e Prazos</TabsTrigger>
-            <TabsTrigger value="equipamentos">Equipamentos</TabsTrigger>
-            <TabsTrigger value="custos-adicionais">Custos Adicionais</TabsTrigger>
+          <TabsList className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1 sm:gap-2 h-auto p-1">
+            <TabsTrigger value="informacoes-gerais" className="text-xs sm:text-sm p-2 sm:p-3">Informações</TabsTrigger>
+            <TabsTrigger value="equipes-prazos" className="text-xs sm:text-sm p-2 sm:p-3">Equipes</TabsTrigger>
+            <TabsTrigger value="equipamentos" className="text-xs sm:text-sm p-2 sm:p-3">Equipamentos</TabsTrigger>
+            <TabsTrigger value="veiculos" className="text-xs sm:text-sm p-2 sm:p-3">Veículos</TabsTrigger>
+            <TabsTrigger value="custos-adicionais" className="text-xs sm:text-sm p-2 sm:p-3 col-span-2 sm:col-span-1">Custos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="informacoes-gerais" className="space-y-4">
-            {/* ─── BLOCO PRINCIPAL: grid de 2 colunas ─── */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* ─── BLOCO PRINCIPAL: grid responsivo ─── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* ─── Nome da Obra ─── */}
               <div className="space-y-2">
                 <Label htmlFor="nomeObra">Nome da Obra *</Label>
@@ -666,8 +855,8 @@ export default function NovaSimulacaoPage() {
                 />
               </div>
 
-              {/* ─── Contato (Nome + Telefone) ─── */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* ─── Contato (Nome + Telefone) - responsivo ─── */}
+              <div className="col-span-1 sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="nomeContato">Nome do Contato</Label>
                   <Input
@@ -793,12 +982,10 @@ export default function NovaSimulacaoPage() {
               </div>
 
               {/*
-                ─── NOVO BLOCO DE 3 COLUNAS (col-span-2) ───
-                Este bloco precisa "ultrapassar" as duas colunas do grid-pai.
-                Por isso usamos `col-span-2` aqui para que ele ocupe as duas colunas
-                e, dentro, tenhamos grid-cols-3 para os três campos.
+                ─── BLOCO DE 3 COLUNAS RESPONSIVO ───
+                Em mobile: 1 coluna, tablet: 2 colunas, desktop: 3 colunas
               */}
-              <div className="grid grid-cols-3 gap-4 col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 col-span-1 sm:col-span-2">
                 {/* Distância até a obra */}
                 <div className="space-y-2">
                   <Label htmlFor="distanciaObra">Distância até a obra (km) *</Label>
@@ -845,8 +1032,8 @@ export default function NovaSimulacaoPage() {
           </TabsContent>
 
           <TabsContent value="equipes-prazos" className="space-y-4">
-            <h3 className="text-lg font-medium">Informações sobre Concretagem e Acabamento</h3>
-            <div className="grid grid-cols-2 gap-4">
+            <h3 className="text-base sm:text-lg font-medium">Informações sobre Concretagem e Acabamento</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="inicioHora">Início da Concretagem (hora) *</Label>
                 <Input
@@ -923,8 +1110,8 @@ export default function NovaSimulacaoPage() {
                 A seguir, continuamos com o restante do grid normalmente.
               */}
 
-              <div className="col-span-2">
-                <h3 className="text-lg font-medium mt-4 mb-2">Preparação e Finalização da Obra</h3>
+              <div className="col-span-1 sm:col-span-2">
+                <h3 className="text-base sm:text-lg font-medium mt-4 mb-2">Preparação e Finalização da Obra</h3>
               </div>
 
               <div className="space-y-2">
@@ -980,8 +1167,8 @@ export default function NovaSimulacaoPage() {
                       <SelectItem value="loading" disabled>
                         Carregando equipes...
                       </SelectItem>
-                    ) : equipesPreparacao.length > 0 ? (
-                      equipesPreparacao.map((equipe) => (
+                    ) : equipesFinalizacao.length > 0 ? (
+                      equipesFinalizacao.map((equipe) => (
                         <SelectItem key={equipe.id} value={String(equipe.id)}>
                           {equipe.qtd_pessoas} pessoas
                         </SelectItem>
@@ -1008,8 +1195,8 @@ export default function NovaSimulacaoPage() {
           </TabsContent>
 
           <TabsContent value="equipamentos" className="space-y-4">
-            <h3 className="text-lg font-medium">Equipamentos</h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <h3 className="text-base sm:text-lg font-medium">Equipamentos</h3>
+            <p className="text-xs sm:text-sm text-gray-500 mb-4">
               Selecione os equipamentos necessários para a obra e defina a quantidade de cada um.
             </p>
 
@@ -1019,7 +1206,7 @@ export default function NovaSimulacaoPage() {
               </div>
             ) : formData.equipamentos.length > 0 ? (
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
                   {formData.equipamentos.map((equipamento) => (
                     <div key={equipamento.id} className="flex flex-col space-y-2 p-3 border rounded-lg">
                       <div className="flex items-center space-x-2">
@@ -1074,13 +1261,105 @@ export default function NovaSimulacaoPage() {
             )}
           </TabsContent>
 
+          <TabsContent value="veiculos" className="space-y-4">
+            <h3 className="text-base sm:text-lg font-medium">Seleção de Veículos</h3>
+            <p className="text-xs sm:text-sm text-gray-500 mb-4">
+              Selecione os veículos necessários para a obra e defina o tipo e quantidade de cada um.
+            </p>
+
+            {loadingVeiculos ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Carregando veículos...</p>
+              </div>
+            ) : formData.veiculos && formData.veiculos.length > 0 ? (
+              <div className="space-y-4">
+                <div className="grid gap-4">
+                  {formData.veiculos.map((veiculo) => (
+                    <div key={veiculo.id} className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 p-4 border rounded-lg">
+                      <Checkbox
+                        id={`veiculo-${veiculo.id}`}
+                        checked={veiculo.selecionado}
+                        onCheckedChange={(checked) => {
+                          const novosVeiculos = formData.veiculos.map((v) =>
+                            v.id === veiculo.id ? { ...v, selecionado: !!checked } : v
+                          )
+                          setFormData({ ...formData, veiculos: novosVeiculos })
+                        }}
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor={`veiculo-${veiculo.id}`} className="text-sm font-medium">
+                          {veiculo.veiculo}
+                        </Label>
+                      </div>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+                        <Label className="text-sm">Tipo:</Label>
+                        <Select
+                          value={veiculo.tipo}
+                          onValueChange={(value) => {
+                            const novosVeiculos = formData.veiculos.map((v) =>
+                              v.id === veiculo.id ? { ...v, tipo: value } : v
+                            )
+                            setFormData({ ...formData, veiculos: novosVeiculos })
+                          }}
+                        >
+                          <SelectTrigger className="w-full sm:w-48">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="PREPARAÇÃO DA OBRA">Preparação da Obra</SelectItem>
+                            <SelectItem value="EXECUÇÃO">Execução</SelectItem>
+                            <SelectItem value="FINALIZAÇÃO">Finalização</SelectItem>
+                            <SelectItem value="GERAL">Geral</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Label className="text-sm">Qtd:</Label>
+                        <Input
+                          type="number"
+                          min="1"
+                          value={veiculo.quantidade}
+                          onChange={(e) => {
+                            const quantidade = parseInt(e.target.value) || 1
+                            const novosVeiculos = formData.veiculos.map((v) =>
+                              v.id === veiculo.id ? { ...v, quantidade } : v
+                            )
+                            setFormData({ ...formData, veiculos: novosVeiculos })
+                          }}
+                          className="w-16 sm:w-20"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {formData.veiculos && formData.veiculos.filter((v) => v.selecionado).length > 0 ? (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                    <h4 className="font-medium mb-2">Veículos Selecionados:</h4>
+                    {formData.veiculos
+                      .filter((v) => v.selecionado)
+                      .map((veiculo) => (
+                        <div key={veiculo.id} className="text-sm">
+                          • {veiculo.veiculo} - {veiculo.tipo} (Qtd: {veiculo.quantidade})
+                        </div>
+                      ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <p>Nenhum veículo encontrado no banco de dados.</p>
+              </div>
+            )}
+          </TabsContent>
+
           <TabsContent value="custos-adicionais" className="space-y-4">
-            <h3 className="text-lg font-medium">Custos Diversos</h3>
-            <p className="text-sm text-gray-500 mb-4">
+            <h3 className="text-base sm:text-lg font-medium">Custos Diversos</h3>
+            <p className="text-xs sm:text-sm text-gray-500 mb-4">
               Estes campos são custos que não são previamente definidos e somam ao custo total da obra.
             </p>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="frete">Frete (R$)</Label>
                 <Input
@@ -1145,8 +1424,8 @@ export default function NovaSimulacaoPage() {
                 />
               </div>
 
-              <div className="col-span-2">
-                <h3 className="text-lg font-medium mt-4 mb-2">Comissão e Valor Final</h3>
+              <div className="col-span-1 sm:col-span-2">
+                <h3 className="text-base sm:text-lg font-medium mt-4 mb-2">Comissão e Valor Final</h3>
               </div>
 
               <div className="space-y-2">
@@ -1180,13 +1459,14 @@ export default function NovaSimulacaoPage() {
           </TabsContent>
         </Tabs>
 
-        <div className="flex justify-between pt-4 border-t">
-          <div className="space-x-2">
-            <Button type="button" variant="outline" onClick={handleSaveRascunho}>
+        <div className="flex flex-col sm:flex-row justify-between pt-4 border-t gap-4 sm:gap-0">
+          <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2">
+            <Button type="button" variant="outline" onClick={handleSaveRascunho} className="w-full sm:w-auto">
               <Save className="h-4 w-4 mr-2" />
-              Salvar como Rascunho
+              <span className="hidden sm:inline">Salvar como Rascunho</span>
+              <span className="sm:hidden">Salvar Rascunho</span>
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
               {isSubmitting ? "Processando..." : "Gerar Simulação"}
             </Button>
           </div>

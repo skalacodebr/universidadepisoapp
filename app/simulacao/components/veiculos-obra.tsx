@@ -17,6 +17,7 @@ interface VeiculoObra {
   id: number
   userid: number
   veiculo: string
+  veiculo_id?: number
   tipo?: string
   quantidade?: number
   created_at: string
@@ -137,9 +138,13 @@ export function VeiculosObra() {
     }
 
     try {
+      // Buscar o ID do veículo selecionado
+      const veiculoSelecionado = veiculosDisponiveis.find(v => v.veiculo === novoVeiculo.veiculo)
+      
       const dadosVeiculo = {
         userid: parseInt(user.id),
         veiculo: novoVeiculo.veiculo,
+        veiculo_id: veiculoSelecionado?.id || null,
         tipo: novoVeiculo.tipo,
         quantidade: parseInt(novoVeiculo.quantidade) || 1
       }
@@ -155,10 +160,12 @@ export function VeiculosObra() {
           toast.error('Erro de permissão na tabela. Execute o script: scripts/configure-rls-obras-veiculos-simulacao.sql')
           
           // Como fallback, adicionar ao estado local temporariamente
+          const veiculoSelecionado = veiculosDisponiveis.find(v => v.veiculo === novoVeiculo.veiculo)
           const novoVeiculoObj: VeiculoObra = {
             id: Math.max(...veiculosObra.map(v => v.id), 0) + 1,
             userid: parseInt(user.id),
             veiculo: novoVeiculo.veiculo,
+            veiculo_id: veiculoSelecionado?.id || undefined,
             tipo: novoVeiculo.tipo,
             quantidade: parseInt(novoVeiculo.quantidade) || 1,
             created_at: new Date().toISOString()
@@ -173,9 +180,13 @@ export function VeiculosObra() {
         
         // Se erro por causa das colunas tipo/quantidade, tentar apenas com campos básicos
         if (error.message.includes('column') && (error.message.includes('tipo') || error.message.includes('quantidade'))) {
+          // Buscar o ID do veículo selecionado
+          const veiculoSelecionado = veiculosDisponiveis.find(v => v.veiculo === novoVeiculo.veiculo)
+          
           const dadosBasicos = {
             userid: parseInt(user.id),
-            veiculo: novoVeiculo.veiculo
+            veiculo: novoVeiculo.veiculo,
+            veiculo_id: veiculoSelecionado?.id || null
           }
           
           const { data: dataBasica, error: errorBasico } = await supabase
