@@ -31,9 +31,7 @@ interface VeiculoDisponivel {
 }
 
 interface NovoVeiculo {
-  quantidade: string
   veiculo: string
-  tipo: string
 }
 
 interface NovoVeiculoBanco {
@@ -56,9 +54,7 @@ export function VeiculosObra() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [novoVeiculo, setNovoVeiculo] = useState<NovoVeiculo>({
-    quantidade: "",
-    veiculo: "",
-    tipo: ""
+    veiculo: ""
   })
   const [isAddVeiculoBancoDialogOpen, setIsAddVeiculoBancoDialogOpen] = useState(false)
   const [novoVeiculoBanco, setNovoVeiculoBanco] = useState<NovoVeiculoBanco>({
@@ -127,13 +123,20 @@ export function VeiculosObra() {
   }
 
   const adicionarVeiculo = async () => {
-    if (!novoVeiculo.veiculo || !novoVeiculo.tipo) {
-      toast.error('Por favor, preencha todos os campos obrigatórios')
+    if (!novoVeiculo.veiculo) {
+      toast.error('Por favor, selecione um veículo')
       return
     }
 
     if (!user?.id) {
       toast.error('Usuário não autenticado')
+      return
+    }
+
+    // Verificar se o veículo já foi adicionado
+    const veiculoExistente = veiculosObra.find(v => v.veiculo === novoVeiculo.veiculo)
+    if (veiculoExistente) {
+      toast.error(`O veículo "${novoVeiculo.veiculo}" já foi adicionado`)
       return
     }
 
@@ -144,9 +147,7 @@ export function VeiculosObra() {
       const dadosVeiculo = {
         userid: parseInt(user.id),
         veiculo: novoVeiculo.veiculo,
-        veiculo_id: veiculoSelecionado?.id || null,
-        tipo: novoVeiculo.tipo,
-        quantidade: parseInt(novoVeiculo.quantidade) || 1
+        veiculo_id: veiculoSelecionado?.id || null
       }
 
       const { data, error } = await supabase
@@ -166,15 +167,13 @@ export function VeiculosObra() {
             userid: parseInt(user.id),
             veiculo: novoVeiculo.veiculo,
             veiculo_id: veiculoSelecionado?.id || undefined,
-            tipo: novoVeiculo.tipo,
-            quantidade: parseInt(novoVeiculo.quantidade) || 1,
             created_at: new Date().toISOString()
           }
 
           setVeiculosObra(prev => [novoVeiculoObj, ...prev])
           toast.success('Veículo adicionado temporariamente (execute o script SQL para salvar no banco)')
           setIsAddDialogOpen(false)
-          setNovoVeiculo({ quantidade: "", veiculo: "", tipo: "" })
+          setNovoVeiculo({ veiculo: "" })
           return
         }
         
@@ -205,7 +204,7 @@ export function VeiculosObra() {
       }
 
       setIsAddDialogOpen(false)
-      setNovoVeiculo({ quantidade: "", veiculo: "", tipo: "" })
+      setNovoVeiculo({ veiculo: "" })
       carregarVeiculosObra()
     } catch (error: any) {
       console.error('Erro ao adicionar veículo:', error)
@@ -391,18 +390,6 @@ export function VeiculosObra() {
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="quantidade">Quantidade</Label>
-                  <Input
-                    id="quantidade"
-                    type="number"
-                    min="1"
-                    value={novoVeiculo.quantidade}
-                    onChange={(e) => setNovoVeiculo(prev => ({ ...prev, quantidade: e.target.value }))}
-                    placeholder="1"
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="veiculo">Veículos</Label>
                   <Select
                     value={novoVeiculo.veiculo}
@@ -423,25 +410,6 @@ export function VeiculosObra() {
                           </SelectItem>
                         ))
                       )}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="tipo">Tipo</Label>
-                  <Select
-                    value={novoVeiculo.tipo}
-                    onValueChange={(value) => setNovoVeiculo(prev => ({ ...prev, tipo: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TIPOS_VEICULO.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -477,30 +445,25 @@ export function VeiculosObra() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[200px]">Código / Quantidade</TableHead>
-                <TableHead>Veículos</TableHead>
-                <TableHead>Tipo</TableHead>
+                <TableHead className="w-[100px]">Código</TableHead>
+                <TableHead>Nome do Veículo</TableHead>
                 <TableHead className="w-[120px]">Opções</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {veiculosFiltrados.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={3} className="text-center py-8 text-gray-500">
                     Nenhum veículo encontrado
                   </TableCell>
                 </TableRow>
               ) : (
                 veiculosFiltrados.map((veiculo) => (
                   <TableRow key={veiculo.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" className="rounded" />
-                        {veiculo.id} / {veiculo.quantidade || 1}
-                      </div>
+                    <TableCell className="text-center">
+                      {veiculo.id}
                     </TableCell>
                     <TableCell className="font-medium">{veiculo.veiculo}</TableCell>
-                    <TableCell>{veiculo.tipo || obterTipoVeiculo(veiculo.veiculo)}</TableCell>
                     <TableCell>
                       <Button
                         variant="destructive"

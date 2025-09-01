@@ -224,6 +224,30 @@ export default function NovaSimulacaoPage() {
     fetchEquipes()
   }, [isAuthenticated, user])
   
+  // Definir valores padrão das equipes quando carregadas (primeiro registro de cada)
+  useEffect(() => {
+    if (equipesConcretagem.length > 0 && !formData.equipeConcretagem) {
+      setFormData(prev => ({ ...prev, equipeConcretagem: String(equipesConcretagem[0].id) }))
+    }
+  }, [equipesConcretagem, formData.equipeConcretagem])
+
+  useEffect(() => {
+    if (equipesAcabamento.length > 0 && !formData.equipeAcabamento) {
+      setFormData(prev => ({ ...prev, equipeAcabamento: String(equipesAcabamento[0].id) }))
+    }
+  }, [equipesAcabamento, formData.equipeAcabamento])
+
+  useEffect(() => {
+    if (equipesPreparacao.length > 0 && !formData.equipePreparacao) {
+      setFormData(prev => ({ ...prev, equipePreparacao: String(equipesPreparacao[0].id) }))
+    }
+  }, [equipesPreparacao, formData.equipePreparacao])
+
+  useEffect(() => {
+    if (equipesFinalizacao.length > 0 && !formData.equipeFinalizacao) {
+      setFormData(prev => ({ ...prev, equipeFinalizacao: String(equipesFinalizacao[0].id) }))
+    }
+  }, [equipesFinalizacao, formData.equipeFinalizacao])
 
   // Buscar equipamentos do banco de dados
   useEffect(() => {
@@ -497,9 +521,7 @@ export default function NovaSimulacaoPage() {
             equipePreparacao: obra.equipes_preparacao_id?.toString() || '',
             prazoPreparacao: obra.prazo_preparacao_obra?.toString() || '',
             equipeConcretagem: obra.equipes_concretagem_id?.toString() || '',
-            prazoConcretagem: obra.prazo_concretagem?.toString() || obra.prazo_obra?.toString() || '',
             equipeAcabamento: obra.equipes_acabamento_id?.toString() || '',
-            prazoAcabamento: obra.prazo_acabamento?.toString() || obra.prazo_obra?.toString() || '',
             equipeFinalizacao: obra.equipes_finalizacao_id?.toString() || '',
             prazoFinalizacao: obra.prazo_finalizacao_obra?.toString() || '',
             frete: obra.valor_frete?.toString() || '',
@@ -531,10 +553,14 @@ export default function NovaSimulacaoPage() {
               if (Array.isArray(equipamentosSelecionados)) {
                 setFormData(prev => ({
                   ...prev,
-                  equipamentos: prev.equipamentos.map(eq => ({
-                    ...eq,
-                    selecionado: equipamentosSelecionados.some(sel => sel.id === eq.id)
-                  }))
+                  equipamentos: prev.equipamentos.map(eq => {
+                    const equipSalvo = equipamentosSelecionados.find(sel => sel.id === eq.id);
+                    return {
+                      ...eq,
+                      selecionado: !!equipSalvo,
+                      quantidade: equipSalvo ? equipSalvo.quantidade : eq.quantidade
+                    };
+                  })
                 }));
               }
             } catch (e) {
@@ -559,10 +585,15 @@ export default function NovaSimulacaoPage() {
               if (Array.isArray(veiculosSelecionados)) {
                 setFormData(prev => ({
                   ...prev,
-                  veiculos: prev.veiculos.map(v => ({
-                    ...v,
-                    selecionado: veiculosSelecionados.some(sel => sel.id === v.id)
-                  }))
+                  veiculos: prev.veiculos.map(v => {
+                    const veiculoSalvo = veiculosSelecionados.find(sel => sel.id === v.id);
+                    return {
+                      ...v,
+                      selecionado: !!veiculoSalvo,
+                      quantidade: veiculoSalvo ? veiculoSalvo.quantidade : v.quantidade,
+                      rs_km: veiculoSalvo ? veiculoSalvo.rs_km : v.rs_km
+                    };
+                  })
                 }));
               }
             } catch (e) {
@@ -577,6 +608,23 @@ export default function NovaSimulacaoPage() {
 
     carregarSimulacaoParaRefazer();
   }, [refazerId, isAuthenticated, user, supabase, reforcoOptions, acabamentoOptions, equipamentos, loadingReforco, loadingAcabamento, loadingEquipamentos]);
+
+  // Desabilitar scroll em inputs numéricos
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      const target = e.target as HTMLInputElement;
+      if (target && target.type === 'number' && document.activeElement === target) {
+        e.preventDefault();
+      }
+    };
+
+    // Adicionar evento para todos os inputs numéricos
+    document.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      document.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
 
   const handleChange = (field: string, value: any) => {
     // Log temporário para debug

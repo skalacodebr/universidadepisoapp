@@ -101,6 +101,21 @@ export function Sidebar() {
           </div>
         </div>
       </div>
+
+      {/* Version Indicator */}
+      <div className="p-2 border-t border-gray-200">
+        <div className="text-xs text-gray-400 text-center">
+          v{process.env.npm_package_version || '0.1.0'} • Build {(Date.now() + 1).toString().slice(-6)}
+        </div>
+        <div className="text-xs text-gray-300 text-center mt-1">
+          {new Date().toLocaleString('pt-BR', { 
+            day: '2-digit', 
+            month: '2-digit', 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })}
+        </div>
+      </div>
     </aside>
   )
 }

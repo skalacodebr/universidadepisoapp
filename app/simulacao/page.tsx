@@ -625,15 +625,34 @@ export default function SimulacaoPage() {
 
       console.log("🔧 Debug custosFixosAdicionais:", custosFixosAdicionais);
 
-      // Calcular subtotal
+      // CORREÇÃO: Usar custo de execução salvo no banco, não recalcular
       const custoExecucao = custoTotalMaoObraSalvo + 
                            custoEquipamentos + 
                            (obra.custo_veiculos || 0) + 
-                           custosFixosAdicionais.total
+                           custosFixosAdicionais.total;
+      
+      console.log("🔧 Debug custoExecucao ANTES da correção:", {
+        custoTotalMaoObraSalvo,
+        custoEquipamentos,
+        custoVeiculos: obra.custo_veiculos || 0,
+        custosFixosAdicionaisTotal: custosFixosAdicionais.total,
+        custoExecucaoCalculado: custoExecucao,
+        custoExecucaoSalvo: obra.custo_total_obra ? (obra.custo_total_obra - (custosFixosData?.[0]?.total || 0)) : null
+      });
+      
+      // Se temos custo total salvo, usar ele subtraindo as despesas fixas
+      const custoExecucaoCorreto = obra.custo_total_obra ? 
+        (obra.custo_total_obra - (custosFixosData?.[0]?.total || 0)) : custoExecucao;
 
       // Calcular valor total e lucro
       const valorTotal = (obra.preco_venda_metro_quadrado || 0) * (obra.area_total_metros_quadrados || 0)
-      const lucroTotal = valorTotal - custoExecucao
+      const lucroTotal = valorTotal - custoExecucaoCorreto
+      
+      console.log("🔧 Debug custoExecucao DEPOIS da correção:", {
+        custoExecucaoAnterior: custoExecucao,
+        custoExecucaoCorreto: custoExecucaoCorreto,
+        diferenca: custoExecucao - custoExecucaoCorreto
+      });
 
       // Buscar nome do tipo de acabamento
       let tipoAcabamentoData = null;
@@ -734,7 +753,38 @@ export default function SimulacaoPage() {
           quantidadeEquipamentos: equipamentosSelecionados.reduce((total: number, equip: any) => total + (equip.quantidade || 0), 0)
         },
         veiculos: {
-          veiculos: [], // Usar dados dos veículos do banco se necessário
+          veiculos: (() => {
+            try {
+              let veiculosSelecionados = obra.veiculos_selecionados;
+              
+              // Se for uma string, fazer parse
+              if (typeof veiculosSelecionados === 'string') {
+                veiculosSelecionados = JSON.parse(veiculosSelecionados);
+              }
+              
+              // Se não for array ou estiver vazio, retornar array vazio
+              if (!Array.isArray(veiculosSelecionados) || veiculosSelecionados.length === 0) {
+                return [];
+              }
+              
+              // Processar cada veículo
+              const distanciaObra = obra.distancia_obra || 0;
+              const diasObra = (obra.prazo_obra || 0) + (obra.prazo_preparacao_obra || 0) + (obra.prazo_finalizacao_obra || 0);
+              
+              return veiculosSelecionados.map((v: any) => ({
+                veiculo: v.veiculo || 'Veículo',
+                tipo: v.tipo || 'GERAL',
+                quantidade: v.quantidade || 1,
+                rs_km: v.rs_km || 0,
+                distancia_obra: distanciaObra,
+                dias_obra: diasObra,
+                custo_total: (v.rs_km || 0) * distanciaObra * 2 * diasObra * (v.quantidade || 1)
+              }));
+            } catch (error) {
+              console.error('Erro ao processar veículos:', error);
+              return [];
+            }
+          })(),
           totalVeiculos: obra.custo_veiculos || 0, // Usar valor do banco
           percentualTotalVeiculos: valorTotal > 0 ? ((obra.custo_veiculos || 0) / valorTotal) * 100 : 0
         },
@@ -748,18 +798,18 @@ export default function SimulacaoPage() {
         },
         demaisDespesasFixas: {
           valorEmpresaPorM2: custosFixosEmpresa?.media_final || 0, // Usar media_final da tabela
-          valorTotalPorM2: obra.area_total_metros_quadrados > 0 ? (custoExecucao + despesasFixasEmpresa) / obra.area_total_metros_quadrados : 0,
+          valorTotalPorM2: obra.area_total_metros_quadrados > 0 ? (custoExecucaoCorreto + despesasFixasEmpresa) / obra.area_total_metros_quadrados : 0,
           areaTotalObra: obra.area_total_metros_quadrados || 0,
           despesasFixas: despesasFixasEmpresa,
-          percentualDespesasFixas: (custoExecucao + despesasFixasEmpresa) > 0 ? (despesasFixasEmpresa / (custoExecucao + despesasFixasEmpresa)) * 100 : 0,
-          custoExecucao: custoExecucao,
-          percentualCustoExecucao: (custoExecucao + despesasFixasEmpresa) > 0 ? (custoExecucao / (custoExecucao + despesasFixasEmpresa)) * 100 : 0,
+          percentualDespesasFixas: (custoExecucaoCorreto + despesasFixasEmpresa) > 0 ? (despesasFixasEmpresa / (custoExecucaoCorreto + despesasFixasEmpresa)) * 100 : 0,
+          custoExecucao: custoExecucaoCorreto,
+          percentualCustoExecucao: (custoExecucaoCorreto + despesasFixasEmpresa) > 0 ? (custoExecucaoCorreto / (custoExecucaoCorreto + despesasFixasEmpresa)) * 100 : 0,
           // Adicionar campos específicos dos custos fixos
           totalCustosFixos: custosFixosEmpresa?.total || 0,
           mediaMes: custosFixosEmpresa?.media_mes || 0,
           mediaFinal: custosFixosEmpresa?.media_final || 0,
           // Custo total usado na fórmula do preço de venda
-          custoTotalObra: obra.custo_total_obra || (custoExecucao + despesasFixasEmpresa)
+          custoTotalObra: obra.custo_total_obra || (custoExecucaoCorreto + despesasFixasEmpresa)
         },
         custoDerivadosVenda: {
           faturamento12Meses: faturamentoMaximo,
@@ -782,13 +832,32 @@ export default function SimulacaoPage() {
           passagem: custosFixosAdicionais.passagem,
           extra: custosFixosAdicionais.extra
         },
-        precoVenda: {
-          precoVendaPorM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0, // Preço calculado pela fórmula
-          sePrecoVendaPorM2For: obra.preco_venda_metro_quadrado || 0, // Valor manual inserido pelo usuário
-          valorTotal: obra.valor_total || 0, // Usar valor total do banco
-          resultado1: obra.lucro_total || 0, // Usar lucro total do banco
-          resultadoPercentual: (obra.valor_total && obra.lucro_total) ? (obra.lucro_total / obra.valor_total) * 100 : 0
-        },
+        precoVenda: (() => {
+          const temPrecoManual = obra.preco_venda_metro_quadrado > 0;
+          const resultado1 = temPrecoManual ? (obra.lucro_manual || 0) : (obra.lucro_total || 0);
+          const resultadoPercentual = temPrecoManual ? 
+            (obra.percentual_lucro_manual || 0) : 
+            ((obra.valor_total && obra.lucro_total) ? (obra.lucro_total / obra.valor_total) * 100 : 0);
+          
+          console.log("💾 === VALORES DAS NOVAS COLUNAS NO BANCO ===", {
+            temPrecoManual,
+            preco_venda_metro_quadrado: obra.preco_venda_metro_quadrado,
+            lucro_total: obra.lucro_total,
+            lucro_manual: obra.lucro_manual,
+            percentual_lucro_manual: obra.percentual_lucro_manual,
+            valor_total_manual: obra.valor_total_manual,
+            resultado1_usado: resultado1,
+            resultadoPercentual_usado: resultadoPercentual
+          });
+          
+          return {
+            precoVendaPorM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0,
+            sePrecoVendaPorM2For: obra.preco_venda_metro_quadrado || 0,
+            valorTotal: obra.valor_total || 0,
+            resultado1: resultado1,
+            resultadoPercentual: resultadoPercentual
+          };
+        })(),
         valorTotal: obra.valor_total || 0, // Usar valor total do banco
         precoVendaM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0,
         lucroTotal: obra.lucro_total || 0, // Usar lucro total do banco

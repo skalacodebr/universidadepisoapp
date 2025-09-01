@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { BellRing, Smartphone } from "lucide-react"
+import { BellRing, Smartphone, RefreshCcw, AlertTriangle } from "lucide-react"
+import { DebugManager } from "@/lib/debug-utils"
 
 interface AppTabProps {
   permissoesDespesas: Record<string, boolean>
@@ -32,6 +33,24 @@ export function AppTab({
   salvarConfiguracoesApp,
   abrirModalDispositivos,
 }: AppTabProps) {
+  const handleClearCache = () => {
+    const confirmClear = window.confirm(
+      "Tem certeza que deseja limpar todos os dados de cache? Esta ação irá recarregar a página e pode resolver problemas de dados desatualizados."
+    )
+    
+    if (confirmClear) {
+      DebugManager.forceClearCache()
+      // Força reload da página após 1 segundo
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
+    }
+  }
+
+  const handleShowDebugInfo = () => {
+    DebugManager.logDebugInfo()
+    alert("Informações de debug foram exibidas no console do navegador (F12)")
+  }
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -132,6 +151,61 @@ export function AppTab({
                   onClick={abrirModalDispositivos}
                 >
                   Gerenciar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Configurações Avançadas */}
+        <Card className="border-0 shadow-sm md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-xl">Configurações Avançadas</CardTitle>
+            <CardDescription className="text-base">
+              Ferramentas para solução de problemas e manutenção do aplicativo
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-red-100 p-2 rounded-full">
+                    <RefreshCcw className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div>
+                    <p className="text-base font-medium text-gray-700">Limpar Cache</p>
+                    <p className="text-sm text-gray-500">
+                      Remove dados temporários que podem estar causando problemas
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+                  onClick={handleClearCache}
+                >
+                  Limpar
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-yellow-100 p-2 rounded-full">
+                    <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                  </div>
+                  <div>
+                    <p className="text-base font-medium text-gray-700">Informações de Debug</p>
+                    <p className="text-sm text-gray-500">
+                      Exibe informações técnicas no console para suporte
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="text-yellow-600 border-yellow-300 hover:bg-yellow-50 hover:text-yellow-700"
+                  onClick={handleShowDebugInfo}
+                >
+                  Mostrar
                 </Button>
               </div>
             </div>

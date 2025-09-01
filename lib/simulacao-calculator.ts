@@ -76,6 +76,7 @@ export interface SimulacaoFormData {
   prazoConcretagem: string
   equipeAcabamento: string
   prazoAcabamento: string
+  equipeFinalizacao: string
   prazoFinalizacao: string
 
   // Equipamentos
@@ -526,7 +527,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     equipeTotal: pessoasFinalizacao,
     prazo: diasFinalizacao,
     custoFinalizacao,
-    totalEquipe: custoTotalMaoObra, // Total de todas as equipes (concretagem + acabamento + preparação + finalização + horas extras)
+    totalEquipe: custoFinalizacao, // CORREÇÃO: Usar apenas custo de finalização
     percentualTotalEquipe: 0
   };
 
@@ -714,9 +715,6 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   };
 
   // CUSTOS DERIVADOS DA VENDA
-  const precoVendaM2 = parseFloat(formData.precoVenda) || 0;
-  const valorTotalVenda = precoVendaM2 * areaTotal;
-  
   // Calcular alíquota do Simples baseada no faturamento definido pelo usuário
   console.log("🔍 Buscando alíquota do Simples para userId:", userId);
   const { faturamentoMaximo, aliquota } = await calcularAliquotaSimples(userId);
@@ -729,23 +727,31 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const lucroDesejado = parseFloat(formData.lucroDesejado) || 0;
   const comissaoPercentual = parseFloat(formData.comissao) || 0;
   
-  // Calcular valores temporários para a fórmula do preço de venda
-  // Estes serão recalculados depois com o preço de venda correto
-  const impostoSimples = valorTotalVenda * (aliquota / 100);
-  const margemLucro = valorTotalVenda * (lucroDesejado / 100);
-  const comissoes = valorTotalVenda * (comissaoPercentual / 100);
+  // Primeiro calcular o preço de venda baseado APENAS no custo e lucro desejado
+  // SEM influência do preço manual digitado
+  const lucroSobreCusto = custoTotalGeral * (lucroDesejado / 100);
   
-  // Log temporário removido - será calculado após obter o preço de venda correto
+  const percentualImpostosEComissoes = (aliquota + comissaoPercentual) / 100;
+  const divisor = 1 - percentualImpostosEComissoes;
+  
+  const custoTotalComLucro = custoTotalGeral + lucroSobreCusto;
+  const precoVendaCalculado = divisor > 0 ? custoTotalComLucro / divisor : custoTotalComLucro;
+  const precoVendaFinalPorM2 = areaTotal > 0 ? precoVendaCalculado / areaTotal : 0;
+  
+  // Agora calcular os valores baseados no preço calculado (não no manual!)
+  const impostoSimplesCalculado = precoVendaCalculado * (aliquota / 100);
+  const margemLucroCalculada = precoVendaCalculado * (lucroDesejado / 100);
+  const comissoesCalculadas = precoVendaCalculado * (comissaoPercentual / 100);
 
   const custoDerivadosVenda: CustoDerivadosVenda = {
     faturamento12Meses: faturamentoMaximo,
-    percentualFaturamento: 0,
-    impostoSimples,
+    percentualFaturamento: 100,
+    impostoSimples: impostoSimplesCalculado,
     percentualImpostoSimples: aliquota,
-    margemLucro,
-    percentualMargemLucro: 0,
-    comissoes,
-    percentualComissoes: 0
+    margemLucro: margemLucroCalculada,
+    percentualMargemLucro: lucroDesejado,
+    comissoes: comissoesCalculadas,
+    percentualComissoes: comissaoPercentual
   };
 
   // OUTROS CUSTOS
@@ -762,19 +768,13 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   };  
   
 
-  // PREÇO DE VENDA E RESULTADO
-  // Fórmula: PreçoVenda = CustoTotal / (1 - (comissão% + alíquota% + lucro%))
-  const percentualTotal = (comissaoPercentual + aliquota + lucroDesejado) / 100;
-  const divisor = 1 - percentualTotal;
-  
-  // Prevenir divisão por zero ou valores negativos
-  const precoVendaCalculado = divisor > 0 ? custoTotalGeral / divisor : custoTotalGeral;
-  const precoVendaFinalPorM2 = areaTotal > 0 ? precoVendaCalculado / areaTotal : 0;
+  // PREÇO DE VENDA FINAL - usar valores já calculados acima
   const resultado1 = precoVendaCalculado;
   
-  // TESTE FORÇADO: Forçar preço manual igual ao calculado
-  const precoVendaPorM2Manual = precoVendaFinalPorM2;
-  const precoVendaTotalManualForcado = precoVendaPorM2Manual * areaTotal;
+  // PREÇO MANUAL - usar o valor digitado pelo usuário (se houver)
+  const precoVendaM2Manual = formData.precoVenda && formData.precoVenda !== "" ? parseFloat(formData.precoVenda) : 0;
+  const precoVendaPorM2Manual = precoVendaM2Manual > 0 ? precoVendaM2Manual : precoVendaFinalPorM2;
+  const precoVendaTotalManual = precoVendaPorM2Manual * areaTotal;
   
   console.log('=== DEBUG PREÇO CALCULADO ===', {
     areaTotalNum: areaTotal,
@@ -802,20 +802,19 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   
   console.log("📈 === CÁLCULO DO PREÇO DE VENDA ===", {
     custoTotal: `R$ ${custoTotalGeral.toFixed(2)}`,
+    lucroSobreCusto: `R$ ${lucroSobreCusto.toFixed(2)}`,
+    custoTotalComLucro: `R$ ${custoTotalComLucro.toFixed(2)}`,
     comissaoPercentual: `${comissaoPercentual}%`,
     aliquotaPercentual: `${aliquota}%`, 
     lucroDesejado: `${lucroDesejado}%`,
-    percentualTotal: `${(percentualTotal * 100).toFixed(2)}%`,
+    percentualImpostosEComissoes: `${(percentualImpostosEComissoes * 100).toFixed(2)}%`,
     divisor: divisor.toFixed(4),
     precoVendaCalculado: `R$ ${precoVendaCalculado.toFixed(2)}`,
     precoVendaPorM2: `R$ ${precoVendaFinalPorM2.toFixed(2)}/m²`,
-    formula: `${custoTotalGeral.toFixed(2)} / (1 - ${(percentualTotal).toFixed(4)}) = ${precoVendaCalculado.toFixed(2)}`
+    formula: `(${custoTotalGeral.toFixed(2)} + ${lucroSobreCusto.toFixed(2)}) / (1 - ${percentualImpostosEComissoes.toFixed(4)}) = ${precoVendaCalculado.toFixed(2)}`
   });
   
-  // Recalcular valores baseados no preço de venda calculado
-  const impostoSimplesCalculado = precoVendaCalculado * (aliquota / 100);
-  const margemLucroCalculada = precoVendaCalculado * (lucroDesejado / 100);
-  const comissoesCalculadas = precoVendaCalculado * (comissaoPercentual / 100);
+  // Usar valores já calculados acima
   
   console.log("💰 === VALORES FINAIS CALCULADOS ===", {
     precoVendaCalculado: `R$ ${precoVendaCalculado.toFixed(2)}`,
@@ -826,35 +825,40 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     lucroLiquido: `R$ ${(precoVendaCalculado - custoTotalGeral - impostoSimplesCalculado - comissoesCalculadas).toFixed(2)}`
   });
   
-  // Coluna da direita: Se o preço de venda for X, qual é a margem de lucro
-  const precoVendaTotalManual = precoVendaM2 * areaTotal; // USANDO VALOR MANUAL INSERIDO
+  // Debug do preço manual
+  console.log("🔍 === DEBUG CONDIÇÃO PREÇO MANUAL ===", {
+    'formData.precoVenda': formData.precoVenda,
+    'precoVendaM2Manual': precoVendaM2Manual,
+    'precoVendaPorM2Manual': precoVendaPorM2Manual,
+    'vai usar': precoVendaM2Manual > 0 ? 'MANUAL' : 'CALCULADO',
+    'precoVendaFinalPorM2 (calculado)': precoVendaFinalPorM2
+  });
   
-  // CORREÇÃO: Usar o mesmo método de cálculo de lucro que o lado esquerdo
-  // Calcular impostos, comissões e outros derivados do preço manual
-  const impostoSimplesManual = precoVendaTotalManual * (aliquota / 100);
-  const comissoesManual = precoVendaTotalManual * (comissaoPercentual / 100);
+  // CORREÇÃO: Usar EXATAMENTE o mesmo método que a esquerda
+  // Lucro bruto = preço total - custos totais (SEM descontar impostos)
+  const margemLucroManual = precoVendaTotalManual - custoTotalGeral;
   
-  // Margem de lucro = preço total - custos totais - impostos - comissões
-  const margemLucroManual = precoVendaTotalManual > custoTotalGeral ? 
-    precoVendaTotalManual - custoTotalGeral - impostoSimplesManual - comissoesManual : 0;
-  
-  // Percentual de lucro sobre o preço de venda (igual ao lado esquerdo)
-  const percentualLucroManual = precoVendaTotalManual > 0 ? (margemLucroManual / precoVendaTotalManual) * 100 : 0;
+  // CORREÇÃO: Calcular percentual sobre o PREÇO (igual à esquerda), não sobre o custo
+  let percentualLucroManual = precoVendaTotalManual > 0 ? (margemLucroManual / precoVendaTotalManual) * 100 : 0;
+  // Se o percentual for menor que -200%, limitar para -200% para melhor legibilidade
+  if (percentualLucroManual < -200) {
+    percentualLucroManual = -200;
+  }
 
   console.log("🔄 === CORREÇÃO DO CÁLCULO MANUAL ===", {
     precoVendaTotalManual: `R$ ${precoVendaTotalManual.toFixed(2)}`,
     custoTotalGeral: `R$ ${custoTotalGeral.toFixed(2)}`,
-    impostoSimplesManual: `R$ ${impostoSimplesManual.toFixed(2)} (${aliquota}%)`,
-    comissoesManual: `R$ ${comissoesManual.toFixed(2)} (${comissaoPercentual}%)`,
     margemLucroManual: `R$ ${margemLucroManual.toFixed(2)}`,
     percentualLucroManual: `${percentualLucroManual.toFixed(2)}%`,
-    formula: `${precoVendaTotalManual.toFixed(2)} - ${custoTotalGeral.toFixed(2)} - ${impostoSimplesManual.toFixed(2)} - ${comissoesManual.toFixed(2)} = ${margemLucroManual.toFixed(2)}`
+    formula: `${precoVendaTotalManual.toFixed(2)} - ${custoTotalGeral.toFixed(2)} = ${margemLucroManual.toFixed(2)} (sem descontar impostos)`
   });
 
   console.log('=== DEBUG PREÇO INFORMADO ===', {
     areaTotalNum: areaTotal,
     custoTotalObra: custoTotalGeral,
-    precoVendaPorM2Manual: precoVendaM2,
+    precoManualFoiInformado: precoVendaM2Manual > 0,
+    precoVendaPorM2Original: precoVendaM2Manual,
+    precoVendaPorM2Usado: precoVendaPorM2Manual,
     precoVendaTotalManual,
     lucroManual: precoVendaTotalManual - custoTotalGeral,
   });
@@ -873,7 +877,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     precoVendaPorM2Calculado: precoVendaFinalPorM2,
     precoVendaTotalCalculado: precoVendaFinalPorM2 * areaTotal,
     lucroCalculado: (precoVendaFinalPorM2 * areaTotal) - custoTotalGeral,
-    precoVendaPorM2Manual: precoVendaM2,
+    precoVendaPorM2Manual: precoVendaM2Manual,
     precoVendaTotalManual,
     lucroManual: precoVendaTotalManual - custoTotalGeral,
     diferencaLucro: ((precoVendaFinalPorM2 * areaTotal) - custoTotalGeral) - (precoVendaTotalManual - custoTotalGeral),
@@ -909,7 +913,6 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     precoVendaFinalPorM2_sofreu_arredondamento: precoVendaFinalPorM2 !== (areaTotal > 0 ? precoVendaCalculado / areaTotal : 0),
     // Valores usados no cálculo manual
     precoVendaPorM2Manual,
-    precoVendaTotalManualForcado,
     precoVendaTotalManual,
     // Comparações de precisão
     multiplicacao_calculado: precoVendaFinalPorM2 * areaTotal,
@@ -919,8 +922,8 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
 
   const precoVenda: PrecoVenda = {
     precoVendaPorM2: precoVendaFinalPorM2, // Preço por m² calculado pela fórmula
-    sePrecoVendaPorM2For: precoVendaM2, // Preço manual inserido pelo usuário
-    valorTotal: resultado1, // Valor total calculado pela fórmula
+    sePrecoVendaPorM2For: precoVendaPorM2Manual, // Preço usado (manual se informado, senão calculado)
+    valorTotal: precoVendaCalculado, // Valor total calculado pela fórmula
     resultado1: margemLucroManual, // CORREÇÃO: Margem de lucro em R$ corrigida
     resultadoPercentual: percentualLucroManual // CORREÇÃO: Percentual de lucro corrigido
   };
@@ -938,7 +941,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     },
     finalizacaoObra: {
       ...finalizacaoObra,
-      percentualTotalEquipe: (custoTotalMaoObra / custoTotalGeral) * 100
+      percentualTotalEquipe: (custoFinalizacao / custoTotalGeral) * 100
     },
     equipamentos: {
       ...equipamentos,
@@ -1033,12 +1036,14 @@ export async function salvarSimulacao(
       telefone_responsavel: formData.telefoneContato,
       nome_contato: formData.nomeContato,
       endereco: formData.endereco,
+      data_inicio: formData.previsaoInicio ? formData.previsaoInicio.toISOString() : null,
       area_total_metros_quadrados: parseFloat(formData.areaTotal),
       tipo_acabamento_id: parseInt(formData.tipoAcabamento) || null,
       distancia_ate_obra: parseFloat(formData.distanciaObra),
       equipes_concretagem_id: parseInt(formData.equipeConcretagem) || null,
       equipes_acabamento_id: parseInt(formData.equipeAcabamento) || null,
       equipes_preparacao_id: parseInt(formData.equipePreparacao) || null,
+      equipes_finalizacao_id: parseInt(formData.equipeFinalizacao) || null,
       prazo_preparacao_obra: parseInt(formData.prazoPreparacao),
       prazo_finalizacao_obra: parseInt(formData.prazoFinalizacao),
       valor_frete: parseFloat(formData.frete),
@@ -1082,6 +1087,11 @@ export async function salvarSimulacao(
       percentual_lucro_desejado: parseFloat(formData.lucroDesejado),
       valor_total: resultado.valorTotal,
       lucro_total: resultado.lucroTotal,
+      // Salvar valores manuais nas novas colunas
+      lucro_manual: resultado.precoVenda.resultado1, // Lucro calculado com preço manual
+      percentual_lucro_manual: resultado.precoVenda.resultadoPercentual, // Percentual calculado com preço manual
+      valor_total_manual: resultado.precoVenda.sePrecoVendaPorM2For > 0 ? 
+        resultado.precoVenda.sePrecoVendaPorM2For * resultado.dadosTecnicos.areaTotal : null,
       horas_inicio_concretagem: formData.inicioHora,
       horas_inicio_acabamento: resultado.dadosTecnicos.inicioAcabamento,
       equipamentos_selecionados: formData.equipamentosSelecionados,

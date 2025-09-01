@@ -102,6 +102,15 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
   const precoVenda = data.precoVenda || {}
   const finalizacaoObra = data.finalizacaoObra || {}
 
+  // Log dos dados de precoVenda recebidos
+  console.log('📊 Dados de precoVenda recebidos:', {
+    precoVenda: precoVenda,
+    resultado1: precoVenda.resultado1,
+    resultadoPercentual: precoVenda.resultadoPercentual,
+    sePrecoVendaPorM2For: precoVenda.sePrecoVendaPorM2For,
+    precoVendaPorM2: precoVenda.precoVendaPorM2
+  })
+
   // Log dos dados de custos fixos recebidos
   console.log('📊 Custos fixos recebidos no componente:', {
     demaisDespesasFixas,
@@ -559,7 +568,7 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                   <span className="font-medium">Lucro %:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg text-green-600">{formatarPercentual(precoVenda.valorTotal > 0 ? (precoVenda.resultado1 / precoVenda.valorTotal) * 100 : 0)}</span>
+                  <span className="font-bold text-lg text-green-600">{formatarPercentual(custoDerivadosVenda.percentualMargemLucro || 0)}</span>
                 </div>
               </div>
             </div>
@@ -570,16 +579,41 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                 </div>
                 <div className="flex justify-between">
                   <span className="font-bold text-lg">{(() => {
-                    const custoTotal = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0);
-                    const lucroValor = precoVenda.resultado1 || 0;
-                    return `${formatarMoeda(custoTotal)} + ${formatarMoeda(lucroValor)}`;
+                    const custoExecucao = demaisDespesasFixas.custoExecucao || 0;
+                    const despesasFixas = demaisDespesasFixas.despesasFixas || 0;
+                    const custoBase = custoExecucao + despesasFixas;
+                    
+                    // SEMPRE mostrar o lucro calculado (não o manual)
+                    const lucroValor = custoDerivadosVenda.margemLucro || 0;
+                    
+                    console.log("🔧 Debug valores Custo + Lucro:", {
+                      custoExecucao, 
+                      despesasFixas, 
+                      custoBase,
+                      lucroValor,
+                      resultado: `${formatarMoeda(custoBase)} + ${formatarMoeda(lucroValor)}`
+                    });
+                    
+                    return `${formatarMoeda(custoBase)} + ${formatarMoeda(lucroValor)}`;
                   })()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Total:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg text-blue-600">{formatarMoeda(precoVenda.valorTotal)}</span>
+                  <span className="font-bold text-lg text-blue-600">{(() => {
+                    // SEMPRE mostrar o preço total calculado (preço/m² × área)
+                    const precoTotalCalculado = precoVenda.precoVendaPorM2 * dadosTecnicos.areaTotal;
+                    
+                    console.log("🔧 Debug Total calculado:", {
+                      precoVendaPorM2: precoVenda.precoVendaPorM2,
+                      areaTotal: dadosTecnicos.areaTotal,
+                      precoTotalCalculado,
+                      resultado: formatarMoeda(precoTotalCalculado)
+                    });
+                    
+                    return formatarMoeda(precoTotalCalculado);
+                  })()}</span>
                 </div>
               </div>
             </div>
@@ -595,44 +629,12 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                   <span className="font-medium">Resultado:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg text-green-600">{(() => {
-                    // USANDO A MESMA LÓGICA DO simulacao-calculator.ts (linhas 829-852)
-                    // Isso garante consistência entre nova simulação e alteração
-                    
-                    const precoVendaTotalManual = precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal;
-                    
-                    // Usar o mesmo custo total que o calculador principal
-                    const custoTotalGeral = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0);
-                    
-                    // Usar os mesmos percentuais do resultado calculado
-                    const aliquotaPercentual = custoDerivadosVenda.percentualImpostoSimples || 0;
-                    const comissaoPercentual = custoDerivadosVenda.percentualComissoes || 0;
-                    
-                    // MESMA FÓRMULA do simulacao-calculator.ts:
-                    // Calcular impostos, comissões e outros derivados do preço manual
-                    const impostoSimplesManual = precoVendaTotalManual * (aliquotaPercentual / 100);
-                    const comissoesManual = precoVendaTotalManual * (comissaoPercentual / 100);
-                    
-                    // Margem de lucro = preço total - custos totais - impostos - comissões
-                    const margemLucroManual = precoVendaTotalManual > custoTotalGeral ? 
-                      precoVendaTotalManual - custoTotalGeral - impostoSimplesManual - comissoesManual : 0;
-                    
-                    // Percentual de lucro sobre o preço de venda (igual ao calculador)
-                    const percentualLucroManual = precoVendaTotalManual > 0 ? (margemLucroManual / precoVendaTotalManual) * 100 : 0;
-                    
-                    console.log("🔄 === CÁLCULO PADRONIZADO IGUAL AO simulacao-calculator.ts ===", {
-                      fonte: "simulation-result.tsx usando mesma lógica",
-                      precoVendaTotalManual: `R$ ${precoVendaTotalManual.toFixed(2)}`,
-                      custoTotalGeral: `R$ ${custoTotalGeral.toFixed(2)}`,
-                      impostoSimplesManual: `R$ ${impostoSimplesManual.toFixed(2)} (${aliquotaPercentual}%)`,
-                      comissoesManual: `R$ ${comissoesManual.toFixed(2)} (${comissaoPercentual}%)`,
-                      margemLucroManual: `R$ ${margemLucroManual.toFixed(2)}`,
-                      percentualLucroManual: `${percentualLucroManual.toFixed(2)}%`,
-                      formula: `${precoVendaTotalManual.toFixed(2)} - ${custoTotalGeral.toFixed(2)} - ${impostoSimplesManual.toFixed(2)} - ${comissoesManual.toFixed(2)} = ${margemLucroManual.toFixed(2)}`
-                    });
-                    
-                    return `${formatarMoeda(margemLucroManual)} (${formatarPercentual(percentualLucroManual)})`;
-                  })()}</span>
+                  <span className="font-bold text-lg text-green-600">
+                    {formatarMoeda(precoVenda.resultado1)} ({(() => {
+                      const percentual = precoVenda.resultadoPercentual || 0;
+                      return percentual <= -200 ? `< -200%` : formatarPercentual(percentual);
+                    })()})
+                  </span>
                 </div>
               </div>
             </div>

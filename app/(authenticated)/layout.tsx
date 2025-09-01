@@ -6,6 +6,7 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { MainLayout } from "@/components/layout/main-layout"
+import { DebugManager } from "@/lib/debug-utils"
 
 export default function AuthenticatedLayout({
   children,
@@ -20,6 +21,14 @@ export default function AuthenticatedLayout({
       router.push("/login")
     }
   }, [isAuthenticated, loading, router])
+
+  // Debug session initialization
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      DebugManager.startDebugSession()
+      DebugManager.exposeGlobalHelpers()
+    }
+  }, [])
 
   if (loading) {
     return (
