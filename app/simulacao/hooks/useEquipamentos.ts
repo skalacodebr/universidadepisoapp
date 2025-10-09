@@ -40,10 +40,27 @@ export function useEquipamentos() {
         return []
       }
 
+      // Buscar equipamentos desativados pelo usuário
+      const { data: desativados, error: errorDesativados } = await supabase
+        .from('equipamentos_desativados')
+        .select('equipamento_id')
+        .eq('usuario_id', user.id)
+
+      if (errorDesativados) {
+        console.error('Erro ao buscar equipamentos desativados:', errorDesativados)
+      }
+
+      const idsDesativados = new Set(desativados?.map(d => d.equipamento_id) || [])
+
+      // Filtrar equipamentos desativados
+      const equipamentosFiltrados = (equipamentosData || []).filter(
+        equipamento => !idsDesativados.has(equipamento.id)
+      )
+
       console.log("Equipamentos encontrados:", equipamentosData?.length)
-      const equipamentosFormatados = equipamentosData || []
-      setEquipamentos(equipamentosFormatados)
-      return equipamentosFormatados
+      console.log("Equipamentos ativos (após filtro):", equipamentosFiltrados.length)
+      setEquipamentos(equipamentosFiltrados)
+      return equipamentosFiltrados
     } catch (error) {
       console.error("Erro geral ao buscar equipamentos:", error)
       return []

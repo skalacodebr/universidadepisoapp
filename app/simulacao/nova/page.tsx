@@ -273,11 +273,29 @@ export default function NovaSimulacaoPage() {
         if (equipamentosError) {
           console.error("Erro ao buscar equipamentos:", equipamentosError)
         } else {
-          console.log("Equipamentos encontrados:", equipamentosData?.length)
-          setEquipamentos(equipamentosData || [])
+          // Buscar equipamentos desativados pelo usuário
+          const { data: desativados, error: errorDesativados } = await supabase
+            .from('equipamentos_desativados')
+            .select('equipamento_id')
+            .eq('usuario_id', user.id)
 
-          // Inicializar equipamentos no formData
-          const equipamentosIniciais: EquipamentoSelecionado[] = (equipamentosData || []).map((eq) => ({
+          if (errorDesativados) {
+            console.error('Erro ao buscar equipamentos desativados:', errorDesativados)
+          }
+
+          const idsDesativados = new Set(desativados?.map(d => d.equipamento_id) || [])
+
+          // Filtrar equipamentos desativados
+          const equipamentosAtivos = (equipamentosData || []).filter(
+            eq => !idsDesativados.has(eq.id)
+          )
+
+          console.log("Equipamentos encontrados:", equipamentosData?.length)
+          console.log("Equipamentos ativos (após filtro):", equipamentosAtivos.length)
+          setEquipamentos(equipamentosAtivos)
+
+          // Inicializar equipamentos no formData (apenas os ativos)
+          const equipamentosIniciais: EquipamentoSelecionado[] = equipamentosAtivos.map((eq) => ({
             id: eq.id,
             nome: eq.nome,
             quantidade: 1,
@@ -309,63 +327,54 @@ export default function NovaSimulacaoPage() {
           return
         }
 
-        console.log("Buscando veículos...")
+        console.log("Buscando veículos disponíveis...")
 
-        // Buscar veículos do usuário da tabela obras_veiculos_simulacao
-        const { data: veiculosUsuario, error: veiculosUsuarioError } = await supabase
-          .from("obras_veiculos_simulacao")
-          .select("*")
-          .eq("userid", user.id)
-          .order("created_at", { ascending: false })
-
-        if (veiculosUsuarioError) {
-          console.error("Erro ao buscar veículos do usuário:", veiculosUsuarioError)
-        }
-
-        // Buscar dados completos dos veículos (para obter rs_km)
+        // Buscar veículos disponíveis (padrão + do usuário)
         const { data: veiculosCompletos, error: veiculosCompletosError } = await supabase
           .from("veiculos")
-          .select("id, veiculo, rs_km")
+          .select("id, veiculo, rs_km, user_id")
+          .or(`user_id.eq.0,user_id.eq.${user.id}`)
           .order("veiculo")
 
         if (veiculosCompletosError) {
           console.error("Erro ao buscar dados dos veículos:", veiculosCompletosError)
+          setLoadingVeiculos(false)
+          return
         }
 
-        // Criar mapa de veículos para acesso rápido
-        const veiculosMap = new Map(veiculosCompletos?.map(v => [v.id, v]) || [])
+        // Buscar veículos desativados pelo usuário
+        const { data: desativados, error: errorDesativados } = await supabase
+          .from('veiculos_desativados')
+          .select('veiculo_id')
+          .eq('usuario_id', user.id)
 
-        // Combinar dados: usar veículos do usuário como base
-        if (veiculosUsuario && veiculosUsuario.length > 0) {
-          console.log("Veículos do usuário encontrados:", veiculosUsuario.length)
-          
-          const veiculosIniciais: VeiculoSelecionado[] = veiculosUsuario.map((vu) => {
-            // Buscar dados completos do veículo usando veiculo_id ou nome
-            let veiculoCompleto = null
-            if (vu.veiculo_id) {
-              veiculoCompleto = veiculosMap.get(vu.veiculo_id)
-            } else {
-              // Fallback: buscar por nome se não tiver veiculo_id
-              veiculoCompleto = veiculosCompletos?.find(v => v.veiculo === vu.veiculo)
-            }
-
-            return {
-              id: vu.veiculo_id || vu.id,
-              veiculo: vu.veiculo,
-              veiculo_id: vu.veiculo_id,
-              tipo: vu.tipo || "GERAL",
-              quantidade: vu.quantidade || 1,
-              selecionado: false,
-              rs_km: veiculoCompleto?.rs_km || 0
-            }
-          })
-
-          setFormData((prev) => ({ ...prev, veiculos: veiculosIniciais }))
-        } else {
-          // Se não houver veículos do usuário, inicializar com array vazio
-          console.log("Nenhum veículo do usuário encontrado")
-          setFormData((prev) => ({ ...prev, veiculos: [] }))
+        if (errorDesativados) {
+          console.error('Erro ao buscar veículos desativados:', errorDesativados)
         }
+
+        const idsDesativados = new Set(desativados?.map(d => d.veiculo_id) || [])
+
+        // Filtrar veículos desativados
+        const veiculosAtivos = (veiculosCompletos || []).filter(
+          v => !idsDesativados.has(v.id)
+        )
+
+        console.log("Veículos encontrados:", veiculosCompletos?.length)
+        console.log("Veículos ativos (após filtro):", veiculosAtivos.length)
+
+        // Transformar veículos ativos em formato para seleção
+        const veiculosIniciais: VeiculoSelecionado[] = veiculosAtivos.map((v) => ({
+          id: v.id,
+          veiculo: v.veiculo,
+          veiculo_id: v.id,
+          tipo: "GERAL",
+          quantidade: 1,
+          selecionado: false,
+          rs_km: v.rs_km || 0
+        }))
+
+        console.log("Veículos disponíveis para seleção:", veiculosIniciais.length)
+        setFormData((prev) => ({ ...prev, veiculos: veiculosIniciais }))
       } catch (error) {
         console.error("Erro geral ao buscar veículos:", error)
       } finally {

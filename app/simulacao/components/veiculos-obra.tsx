@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, Search, AlertTriangle } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 import { useAuth } from "@/contexts/auth-context"
 import { getSupabaseClient } from "@/lib/supabase"
 import { toast } from "sonner"
@@ -28,6 +29,9 @@ interface VeiculoDisponivel {
   veiculo: string
   rs_km: number
   created_at: string
+  user_id?: string
+  isPadrao?: boolean
+  desativado?: boolean
 }
 
 interface NovoVeiculo {
@@ -92,10 +96,11 @@ export function VeiculosObra() {
 
   const carregarVeiculosDisponiveis = async () => {
     try {
-      // Buscar veículos disponíveis
+      // Buscar veículos disponíveis (padrão + do usuário)
       const { data, error } = await supabase
         .from('veiculos')
         .select('*')
+        .or(`user_id.eq.0,user_id.eq.${user?.id}`)
         .order('veiculo')
 
       if (error) {
@@ -103,7 +108,7 @@ export function VeiculosObra() {
         toast.error(`Erro ao carregar veículos: ${error.message}`)
         return
       }
-      
+
       // Se não há dados, usar mock para teste
       if (!data || data.length === 0) {
         const mockVeiculos = [
@@ -114,7 +119,33 @@ export function VeiculosObra() {
         ]
         setVeiculosDisponiveis(mockVeiculos)
       } else {
-        setVeiculosDisponiveis(data)
+        // Buscar veículos desativados pelo usuário
+        const { data: desativados, error: errorDesativados } = await supabase
+          .from('veiculos_desativados')
+          .select('veiculo_id')
+          .eq('usuario_id', user?.id || 0)
+
+        if (errorDesativados) {
+          console.error('Erro ao buscar veículos desativados:', errorDesativados)
+        }
+
+        const idsDesativados = new Set(desativados?.map(d => d.veiculo_id) || [])
+
+        // Marcar veículos como padrão e desativados
+        const veiculosComFlag = data.map((veiculo: VeiculoDisponivel) => {
+          // Veículo é padrão se user_id é '0' (string), 0 (number) ou null
+          const isPadrao = veiculo.user_id === '0' || veiculo.user_id === 0 || veiculo.user_id === null
+
+          console.log(`Veículo ${veiculo.veiculo}: user_id=${veiculo.user_id} (tipo: ${typeof veiculo.user_id}), isPadrao=${isPadrao}`)
+
+          return {
+            ...veiculo,
+            isPadrao,
+            desativado: idsDesativados.has(veiculo.id)
+          }
+        })
+
+        setVeiculosDisponiveis(veiculosComFlag)
       }
     } catch (error) {
       console.error('Erro ao carregar veículos disponíveis:', error)
@@ -229,6 +260,60 @@ export function VeiculosObra() {
     }
   }
 
+  const toggleDesativarVeiculo = async (veiculoId: number, desativado: boolean) => {
+    if (!user?.id) {
+      toast.error('Usuário não autenticado')
+      return
+    }
+
+    try {
+      if (desativado) {
+        // Reativar: remover da tabela de desativados
+        const { error } = await supabase
+          .from('veiculos_desativados')
+          .delete()
+          .eq('usuario_id', user.id)
+          .eq('veiculo_id', veiculoId)
+
+        if (error) throw error
+        toast.success('Veículo reativado com sucesso!')
+      } else {
+        // Desativar: adicionar na tabela de desativados
+        const { error } = await supabase
+          .from('veiculos_desativados')
+          .insert({
+            usuario_id: user.id,
+            veiculo_id: veiculoId
+          })
+
+        if (error) throw error
+        toast.success('Veículo desativado com sucesso!')
+      }
+
+      carregarVeiculosDisponiveis()
+    } catch (error) {
+      console.error('Erro ao alterar status do veículo:', error)
+      toast.error('Erro ao alterar status do veículo')
+    }
+  }
+
+  const excluirVeiculoBanco = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('veiculos')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      toast.success('Veículo removido com sucesso do banco!')
+      carregarVeiculosDisponiveis()
+    } catch (error) {
+      console.error('Erro ao excluir veículo do banco:', error)
+      toast.error('Erro ao remover veículo do banco')
+    }
+  }
+
   const adicionarVeiculoBanco = async (novoVeiculo: NovoVeiculoBanco) => {
     if (!novoVeiculo.veiculo || !novoVeiculo.rs_km) {
       toast.error('Por favor, preencha todos os campos obrigatórios')
@@ -293,185 +378,127 @@ export function VeiculosObra() {
 
   return (
     <div className="space-y-6">
-      {/* Header com busca e botão adicionar */}
+      {/* Header com botão adicionar */}
       <div className="flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              placeholder="Palavra-Chave"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-64"
-            />
-          </div>
-          <Button 
-            variant="outline"
-            className="bg-[#007EA3] hover:bg-[#006a8a] text-white"
-          >
-            Pesquisar
-          </Button>
-        </div>
+        <h2 className="text-xl font-semibold text-gray-900">Veículos Disponíveis no Banco de Dados</h2>
 
-        <div className="flex gap-2">
-          <Dialog open={isAddVeiculoBancoDialogOpen} onOpenChange={setIsAddVeiculoBancoDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-[#007EA3] hover:bg-[#006a8a] text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                Novo Veículo
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Adicionar Novo Veículo ao Banco</DialogTitle>
-                <DialogDescription>
-                  Cadastre um novo veículo no banco de dados.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="veiculo-banco">Nome do Veículo</Label>
-                  <Input
-                    id="veiculo-banco"
-                    value={novoVeiculoBanco.veiculo}
-                    onChange={(e) => setNovoVeiculoBanco(prev => ({ ...prev, veiculo: e.target.value }))}
-                    placeholder="Ex: Caminhão, Pick Up, etc"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="rs-km">Custo por KM (R$)</Label>
-                  <Input
-                    id="rs-km"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={novoVeiculoBanco.rs_km}
-                    onChange={(e) => setNovoVeiculoBanco(prev => ({ ...prev, rs_km: parseFloat(e.target.value) }))}
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    onClick={() => {
-                      adicionarVeiculoBanco(novoVeiculoBanco)
-                      setIsAddVeiculoBancoDialogOpen(false)
-                      setNovoVeiculoBanco({ veiculo: "", rs_km: 0 })
-                    }}
-                    className="bg-[#007EA3] hover:bg-[#006a8a] text-white"
-                  >
-                    Confirmar
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsAddVeiculoBancoDialogOpen(false)}
-                  >
-                    Voltar
-                  </Button>
-                </div>
+        <Dialog open={isAddVeiculoBancoDialogOpen} onOpenChange={setIsAddVeiculoBancoDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-[#007EA3] hover:bg-[#006a8a] text-white">
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Veículo
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Adicionar Novo Veículo ao Banco</DialogTitle>
+              <DialogDescription>
+                Cadastre um novo veículo no banco de dados.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="veiculo-banco">Nome do Veículo</Label>
+                <Input
+                  id="veiculo-banco"
+                  value={novoVeiculoBanco.veiculo}
+                  onChange={(e) => setNovoVeiculoBanco(prev => ({ ...prev, veiculo: e.target.value }))}
+                  placeholder="Ex: Caminhão, Pick Up, etc"
+                />
               </div>
-            </DialogContent>
-          </Dialog>
-          
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-[#007EA3] hover:bg-[#006a8a] text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                Incluir Registro
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Adicionar Novo Veículo</DialogTitle>
-                <DialogDescription>
-                  Preencha os dados do veículo que deseja adicionar à obra.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="veiculo">Veículos</Label>
-                  <Select
-                    value={novoVeiculo.veiculo}
-                    onValueChange={(value) => setNovoVeiculo(prev => ({ ...prev, veiculo: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={veiculosDisponiveis.length > 0 ? "Selecione um veículo" : "Carregando veículos..."} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {veiculosDisponiveis.length === 0 ? (
-                        <SelectItem value="no-data" disabled>
-                          Nenhum veículo disponível
-                        </SelectItem>
-                      ) : (
-                        veiculosDisponiveis.map((veiculo) => (
-                          <SelectItem key={veiculo.id} value={veiculo.veiculo}>
-                            {veiculo.veiculo}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
 
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    onClick={adicionarVeiculo}
-                    className="bg-[#007EA3] hover:bg-[#006a8a] text-white"
-                  >
-                    Confirmar
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setIsAddDialogOpen(false)}
-                  >
-                    Voltar
-                  </Button>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="rs-km">Custo por KM (R$)</Label>
+                <Input
+                  id="rs-km"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={novoVeiculoBanco.rs_km}
+                  onChange={(e) => setNovoVeiculoBanco(prev => ({ ...prev, rs_km: parseFloat(e.target.value) }))}
+                  placeholder="0.00"
+                />
               </div>
-            </DialogContent>
-          </Dialog>
-        </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={() => {
+                    adicionarVeiculoBanco(novoVeiculoBanco)
+                    setIsAddVeiculoBancoDialogOpen(false)
+                    setNovoVeiculoBanco({ veiculo: "", rs_km: 0 })
+                  }}
+                  className="bg-[#007EA3] hover:bg-[#006a8a] text-white"
+                >
+                  Confirmar
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsAddVeiculoBancoDialogOpen(false)}
+                >
+                  Voltar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Informação de registros encontrados */}
       <div className="text-sm text-gray-600">
-        Foram encontrados {veiculosFiltrados.length} registros de "Veículos da Obra".
+        Gerencie os veículos disponíveis para seleção. Foram encontrados {veiculosDisponiveis.length} veículos cadastrados.
       </div>
 
-      {/* Tabela de veículos */}
+      {/* Tabela de Veículos */}
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">Código</TableHead>
-                <TableHead>Nome do Veículo</TableHead>
+                <TableHead>Nome</TableHead>
+                <TableHead>Custo por KM</TableHead>
+                <TableHead className="w-[120px]">Status</TableHead>
                 <TableHead className="w-[120px]">Opções</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {veiculosFiltrados.length === 0 ? (
+              {veiculosDisponiveis.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-gray-500">
-                    Nenhum veículo encontrado
+                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
+                    Nenhum veículo disponível
                   </TableCell>
                 </TableRow>
               ) : (
-                veiculosFiltrados.map((veiculo) => (
-                  <TableRow key={veiculo.id}>
-                    <TableCell className="text-center">
-                      {veiculo.id}
+                veiculosDisponiveis.map((veiculo) => (
+                  <TableRow key={veiculo.id} className={veiculo.desativado ? 'opacity-50' : ''}>
+                    <TableCell className="font-medium">
+                      {veiculo.veiculo}
+                      {veiculo.isPadrao && (
+                        <span className="ml-2 px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                          Padrão
+                        </span>
+                      )}
                     </TableCell>
-                    <TableCell className="font-medium">{veiculo.veiculo}</TableCell>
+                    <TableCell>R$ {veiculo.rs_km.toFixed(2)}/km</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={!veiculo.desativado}
+                          onCheckedChange={() => toggleDesativarVeiculo(veiculo.id, veiculo.desativado || false)}
+                        />
+                        <span className="text-sm text-gray-600">
+                          {veiculo.desativado ? 'Desativado' : 'Ativo'}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => excluirVeiculo(veiculo.id)}
+                        onClick={() => excluirVeiculoBanco(veiculo.id)}
                         className="h-8"
+                        disabled={veiculo.isPadrao}
+                        title={veiculo.isPadrao ? "Veículos padrão não podem ser excluídos" : ""}
                       >
-                        <AlertTriangle className="h-4 w-4 mr-1" />
                         Excluir
                       </Button>
                     </TableCell>

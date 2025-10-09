@@ -11,6 +11,10 @@ import { NumericFormat } from "react-number-format"
 import { getSupabaseClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
+import { Plus, Trash2 } from "lucide-react"
+import { toast } from "sonner"
 
 const supabase = getSupabaseClient()
 
@@ -60,6 +64,12 @@ const NumberInput = ({ id, value, onChange, label, placeholder }: {
     />
   </div>
 )
+
+interface CustoCustomizado {
+  id: number
+  nome: string
+  valor: number
+}
 
 interface CustoFixoFormData {
   // Instalações (I)
@@ -182,6 +192,11 @@ export default function CustoFixoPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [existingRecordId, setExistingRecordId] = useState<number | null>(null)
   const [isLoadingData, setIsLoadingData] = useState(true)
+
+  // Estados para custos customizados
+  const [custosCustomizados, setCustosCustomizados] = useState<CustoCustomizado[]>([])
+  const [isAddCustoDialogOpen, setIsAddCustoDialogOpen] = useState(false)
+  const [novoCusto, setNovoCusto] = useState({ nome: "", valor: "" })
 
   // Debug: Monitor changes in formData and existingRecordId
   useEffect(() => {
@@ -345,6 +360,88 @@ export default function CustoFixoPage() {
     fetchExistingData()
   }, [])
 
+  // Carregar custos customizados
+  useEffect(() => {
+    const fetchCustosCustomizados = async () => {
+      if (!user?.id) return
+
+      try {
+        const { data, error } = await supabase
+          .from('custofixo_usuario_customizado')
+          .select('*')
+          .eq('usuario_id', user.id)
+          .order('nome')
+
+        if (error) {
+          console.error('Erro ao carregar custos customizados:', error)
+          return
+        }
+
+        setCustosCustomizados(data || [])
+      } catch (error) {
+        console.error('Erro geral ao carregar custos customizados:', error)
+      }
+    }
+
+    fetchCustosCustomizados()
+  }, [user])
+
+  // Adicionar novo custo customizado
+  const adicionarCustoCustomizado = async () => {
+    if (!novoCusto.nome || !novoCusto.valor) {
+      toast.error('Por favor, preencha nome e valor')
+      return
+    }
+
+    if (!user?.id) {
+      toast.error('Usuário não autenticado')
+      return
+    }
+
+    try {
+      // O valor já vem como string numérica pura do NumericFormat (ex: "500")
+      const valorNumerico = parseFloat(novoCusto.valor) || 0
+
+      const { data, error } = await supabase
+        .from('custofixo_usuario_customizado')
+        .insert({
+          usuario_id: user.id,
+          nome: novoCusto.nome,
+          valor: valorNumerico
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+
+      setCustosCustomizados(prev => [...prev, data])
+      setNovoCusto({ nome: "", valor: "" })
+      setIsAddCustoDialogOpen(false)
+      toast.success('Custo adicionado com sucesso!')
+    } catch (error) {
+      console.error('Erro ao adicionar custo:', error)
+      toast.error('Erro ao adicionar custo')
+    }
+  }
+
+  // Excluir custo customizado
+  const excluirCustoCustomizado = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('custofixo_usuario_customizado')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      setCustosCustomizados(prev => prev.filter(c => c.id !== id))
+      toast.success('Custo removido com sucesso!')
+    } catch (error) {
+      console.error('Erro ao excluir custo:', error)
+      toast.error('Erro ao remover custo')
+    }
+  }
+
   const handleChange = (field: keyof CustoFixoFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
@@ -379,9 +476,15 @@ export default function CustoFixoPage() {
       return acc + value;
     }, 0);
 
+    // Adicionar custos customizados ao total
+    const totalCustomizados = custosCustomizados.reduce((acc, custo) => acc + custo.valor, 0)
+    const totalFinal = sum + totalCustomizados
+
     console.log('Total calculado:', sum);
-    return sum;
-  }, [formData])
+    console.log('Total custos customizados:', totalCustomizados);
+    console.log('Total final:', totalFinal);
+    return totalFinal;
+  }, [formData, custosCustomizados])
 
   // Calcular média final (total / media_mes)
   const mediaFinal = useMemo(() => {
@@ -634,10 +737,11 @@ export default function CustoFixoPage() {
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <Tabs defaultValue="instalacoes" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="instalacoes">Instalações</TabsTrigger>
                 <TabsTrigger value="funcionarios">Funcionários</TabsTrigger>
                 <TabsTrigger value="administrativo">Administrativo</TabsTrigger>
+                <TabsTrigger value="customizados">Personalizados</TabsTrigger>
               </TabsList>
 
               <TabsContent value="instalacoes">
@@ -929,6 +1033,107 @@ export default function CustoFixoPage() {
                       placeholder="0,00"
                     />
                   </div>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="customizados">
+                <Card className="p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold">Custos Personalizados</h3>
+                    <Dialog open={isAddCustoDialogOpen} onOpenChange={setIsAddCustoDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" size="sm">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Adicionar Custo
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Adicionar Custo Personalizado</DialogTitle>
+                          <DialogDescription>
+                            Adicione um custo fixo personalizado que será incluído no cálculo total.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="nome-custo">Nome do Custo</Label>
+                            <Input
+                              id="nome-custo"
+                              placeholder="Ex: Seguro adicional"
+                              value={novoCusto.nome}
+                              onChange={(e) => setNovoCusto(prev => ({ ...prev, nome: e.target.value }))}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="valor-custo">Valor</Label>
+                            <NumericFormat
+                              id="valor-custo"
+                              value={novoCusto.valor}
+                              onValueChange={(values) => setNovoCusto(prev => ({ ...prev, valor: values.value }))}
+                              thousandSeparator="."
+                              decimalSeparator=","
+                              decimalScale={2}
+                              fixedDecimalScale
+                              prefix="R$ "
+                              placeholder="R$ 0,00"
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setIsAddCustoDialogOpen(false)
+                              setNovoCusto({ nome: "", valor: "" })
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                          <Button type="button" onClick={adicionarCustoCustomizado}>
+                            Adicionar
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  {custosCustomizados.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p>Nenhum custo personalizado cadastrado.</p>
+                      <p className="text-sm mt-2">Clique em "Adicionar Custo" para criar um novo.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead className="text-right">Valor</TableHead>
+                          <TableHead className="w-[100px] text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {custosCustomizados.map((custo) => (
+                          <TableRow key={custo.id}>
+                            <TableCell className="font-medium">{custo.nome}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(custo.valor)}</TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => excluirCustoCustomizado(custo.id)}
+                                className="h-8 w-8 p-0"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </Card>
               </TabsContent>
             </Tabs>

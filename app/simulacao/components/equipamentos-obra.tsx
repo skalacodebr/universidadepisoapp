@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from "@/components/ui/switch"
 import { Plus, Search } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { getSupabaseClient } from "@/lib/supabase"
@@ -20,6 +21,7 @@ interface Equipamento {
   user_id: string
   created_at: string
   isPadrao?: boolean
+  desativado?: boolean
 }
 
 interface NovoEquipamento {
@@ -50,15 +52,29 @@ export function EquipamentosObra() {
   const carregarEquipamentos = async () => {
     setLoading(true)
     try {
+      // Buscar todos os equipamentos
       const { data, error } = await supabase
         .from('equipamentos')
         .select('*')
 
       if (error) throw error
 
+      // Buscar equipamentos desativados pelo usuário
+      const { data: desativados, error: errorDesativados } = await supabase
+        .from('equipamentos_desativados')
+        .select('equipamento_id')
+        .eq('usuario_id', user?.id || 0)
+
+      if (errorDesativados) {
+        console.error('Erro ao buscar equipamentos desativados:', errorDesativados)
+      }
+
+      const idsDesativados = new Set(desativados?.map(d => d.equipamento_id) || [])
+
       const equipamentosComFlag = (data || []).map((equipamento: Equipamento) => ({
         ...equipamento,
-        isPadrao: equipamento.user_id === '0'
+        isPadrao: equipamento.user_id === '0',
+        desativado: idsDesativados.has(equipamento.id)
       }))
 
       setEquipamentos(equipamentosComFlag)
@@ -123,6 +139,43 @@ export function EquipamentosObra() {
     } catch (error) {
       console.error('Erro ao excluir equipamento:', error)
       toast.error('Erro ao remover equipamento')
+    }
+  }
+
+  const toggleDesativarEquipamento = async (equipamentoId: number, desativado: boolean) => {
+    if (!user?.id) {
+      toast.error('Usuário não autenticado')
+      return
+    }
+
+    try {
+      if (desativado) {
+        // Reativar: remover da tabela de desativados
+        const { error } = await supabase
+          .from('equipamentos_desativados')
+          .delete()
+          .eq('usuario_id', user.id)
+          .eq('equipamento_id', equipamentoId)
+
+        if (error) throw error
+        toast.success('Equipamento reativado com sucesso!')
+      } else {
+        // Desativar: adicionar na tabela de desativados
+        const { error } = await supabase
+          .from('equipamentos_desativados')
+          .insert({
+            usuario_id: user.id,
+            equipamento_id: equipamentoId
+          })
+
+        if (error) throw error
+        toast.success('Equipamento desativado com sucesso!')
+      }
+
+      carregarEquipamentos()
+    } catch (error) {
+      console.error('Erro ao alterar status do equipamento:', error)
+      toast.error('Erro ao alterar status do equipamento')
     }
   }
 
@@ -233,19 +286,20 @@ export function EquipamentosObra() {
               <TableRow>
                 <TableHead>Nome</TableHead>
                 <TableHead>Valor por Dia</TableHead>
+                <TableHead className="w-[120px]">Status</TableHead>
                 <TableHead className="w-[120px]">Opções</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {equipamentosFiltrados.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={4} className="text-center py-8 text-gray-500">
                     Nenhum equipamento encontrado
                   </TableCell>
                 </TableRow>
               ) : (
                 equipamentosFiltrados.map((equipamento) => (
-                  <TableRow key={equipamento.id}>
+                  <TableRow key={equipamento.id} className={equipamento.desativado ? 'opacity-50' : ''}>
                     <TableCell className="font-medium">
                       {equipamento.nome}
                       {equipamento.isPadrao && (
@@ -255,6 +309,17 @@ export function EquipamentosObra() {
                       )}
                     </TableCell>
                     <TableCell>R$ {equipamento.valor_dia.toFixed(2)}/dia</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={!equipamento.desativado}
+                          onCheckedChange={() => toggleDesativarEquipamento(equipamento.id, equipamento.desativado || false)}
+                        />
+                        <span className="text-sm text-gray-600">
+                          {equipamento.desativado ? 'Desativado' : 'Ativo'}
+                        </span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Button
                         variant="destructive"
