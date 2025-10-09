@@ -78,7 +78,7 @@ export async function listarUsuarios() {
           cpf: user.cpf,
           email: user.email,
           cargo: cargoNome,
-          telefone: "",
+          telefone: user.telefone || "",
           salario: `R$ ${salarioNum.toFixed(2)}`,
           beneficios: user.beneficios || "",
           encargos: user.encargos || "",
@@ -97,8 +97,8 @@ export async function listarUsuarios() {
 // Criar novo usuário
 export async function criarUsuario(usuario: Usuario) {
   try {
-    // Hash da senha (CPF sem formatação por padrão)
-    const senhaHash = await hashSHA256(usuario.cpf.replace(/\D/g, ""))
+    // Hash da senha (usa a senha fornecida ou CPF sem formatação como fallback)
+    const senhaHash = await hashSHA256(usuario.senha || usuario.cpf.replace(/\D/g, ""))
 
     // Buscar ID do cargo pelo nome
     const cargoId = await obterCargoIdPorNome(usuario.cargo)
@@ -113,6 +113,7 @@ export async function criarUsuario(usuario: Usuario) {
       cpf: usuario.cpf,
       email: usuario.email,
       senha: senhaHash,
+      telefone: usuario.telefone || null,
       cargos_id: cargoId,
       status: usuario.status === "Ativo",
       salario: parseCurrency(usuario.salario),
@@ -147,6 +148,7 @@ export async function atualizarUsuario(id: number, usuario: Usuario) {
       nome: usuario.nome,
       cpf: usuario.cpf,
       email: usuario.email,
+      telefone: usuario.telefone || null,
       cargos_id: cargoId,
       status: usuario.status === "Ativo",
       salario: parseCurrency(usuario.salario),
@@ -204,7 +206,7 @@ export async function buscarUsuarioPorId(id: number) {
       cpf: data.cpf,
       email: data.email,
       cargo: cargoNome,
-      telefone: "",
+      telefone: data.telefone || "",
       salario: `R$ ${salarioNum.toFixed(2)}`,
       beneficios: data.beneficios || "",
       encargos: data.encargos || "",

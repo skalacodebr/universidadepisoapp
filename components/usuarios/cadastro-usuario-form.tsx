@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckCircle2, Info, X } from "lucide-react"
+import { CheckCircle2, Info, X, Eye, EyeOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
@@ -39,6 +39,8 @@ interface FormErrors {
   cpf?: string
   email?: string
   cargo?: string
+  senha?: string
+  confirmarSenha?: string
 }
 
 export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSave }: CadastroUsuarioFormProps) {
@@ -47,6 +49,10 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
   const [cpf, setCpf] = useState(usuario?.cpf || "")
   const [cargo, setCargo] = useState(usuario?.cargo || "")
   const [email, setEmail] = useState(usuario?.email || "")
+  const [senha, setSenha] = useState("")
+  const [confirmarSenha, setConfirmarSenha] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [telefone, setTelefone] = useState(usuario?.telefone || "")
   const [salario, setSalario] = useState(usuario?.salario || "")
   const [beneficios, setBeneficios] = useState(usuario?.beneficios || "")
@@ -167,6 +173,32 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
       errors.email = "E-mail inválido"
     }
 
+    // Validação de senha
+    if (!isEditing) {
+      // Ao criar novo usuário, senha é obrigatória
+      if (!senha) {
+        errors.senha = "Senha é obrigatória"
+      } else if (senha.length < 6) {
+        errors.senha = "Senha deve ter no mínimo 6 caracteres"
+      }
+
+      if (!confirmarSenha) {
+        errors.confirmarSenha = "Confirmação de senha é obrigatória"
+      } else if (senha !== confirmarSenha) {
+        errors.confirmarSenha = "As senhas não coincidem"
+      }
+    } else {
+      // Ao editar, senha é opcional, mas se informada deve ser válida
+      if (senha) {
+        if (senha.length < 6) {
+          errors.senha = "Senha deve ter no mínimo 6 caracteres"
+        }
+        if (senha !== confirmarSenha) {
+          errors.confirmarSenha = "As senhas não coincidem"
+        }
+      }
+    }
+
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -181,7 +213,7 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
     setIsSubmitting(true)
 
     try {
-      const dadosUsuario = {
+      const dadosUsuario: any = {
         nome,
         cpf,
         cargo,
@@ -192,6 +224,11 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
         encargos,
         custoTotal,
         status,
+      }
+
+      // Adicionar senha apenas se foi preenchida
+      if (senha) {
+        dadosUsuario.senha = senha
       }
 
       let response
@@ -243,11 +280,34 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
   // Função para navegar para a próxima aba
   const nextTab = () => {
     if (activeTab === "dados-pessoais") {
-      if (nome && cpf && cargo && email) {
-        setActiveTab("dados-financeiros")
+      // Validar apenas campos da aba atual
+      const errors: FormErrors = {}
+
+      if (!nome.trim()) errors.nome = "Nome é obrigatório"
+      if (!cpf.trim() || cpf.length < 14) errors.cpf = "CPF inválido"
+      if (!cargo) errors.cargo = "Cargo é obrigatório"
+      if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "E-mail inválido"
+
+      // Validação de senha para novo usuário
+      if (!isEditing) {
+        if (!senha) errors.senha = "Senha é obrigatória"
+        else if (senha.length < 6) errors.senha = "Senha deve ter no mínimo 6 caracteres"
+        if (!confirmarSenha) errors.confirmarSenha = "Confirmação de senha é obrigatória"
+        else if (senha !== confirmarSenha) errors.confirmarSenha = "As senhas não coincidem"
       } else {
-        validateForm()
+        // Para edição, validar apenas se senha foi informada
+        if (senha) {
+          if (senha.length < 6) errors.senha = "Senha deve ter no mínimo 6 caracteres"
+          if (senha !== confirmarSenha) errors.confirmarSenha = "As senhas não coincidem"
+        }
       }
+
+      if (Object.keys(errors).length > 0) {
+        setFormErrors(errors)
+        return
+      }
+
+      setActiveTab("dados-financeiros")
     }
   }
 
@@ -434,6 +494,75 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
                   {formErrors.email && (
                     <p id="email-error" className="text-sm text-red-500 mt-1">
                       {formErrors.email}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="senha" className={formErrors.senha ? "text-red-500" : ""}>
+                    Senha {!isEditing && <span className="text-red-500">*</span>}
+                    {isEditing && <span className="text-xs text-gray-500 font-normal ml-2">(deixe em branco para manter a atual)</span>}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="senha"
+                      type={showPassword ? "text" : "password"}
+                      value={senha}
+                      onChange={(e) => {
+                        setSenha(e.target.value)
+                        if (formErrors.senha) {
+                          setFormErrors({ ...formErrors, senha: undefined })
+                        }
+                      }}
+                      placeholder={isEditing ? "••••••••" : "Digite a senha"}
+                      className={`${formErrors.senha ? "border-red-500 focus:ring-red-500" : ""} pr-10`}
+                      aria-invalid={!!formErrors.senha}
+                      aria-describedby={formErrors.senha ? "senha-error" : undefined}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {formErrors.senha && (
+                    <p id="senha-error" className="text-sm text-red-500 mt-1">
+                      {formErrors.senha}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmarSenha" className={formErrors.confirmarSenha ? "text-red-500" : ""}>
+                    Confirmar Senha {!isEditing && <span className="text-red-500">*</span>}
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="confirmarSenha"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={confirmarSenha}
+                      onChange={(e) => {
+                        setConfirmarSenha(e.target.value)
+                        if (formErrors.confirmarSenha) {
+                          setFormErrors({ ...formErrors, confirmarSenha: undefined })
+                        }
+                      }}
+                      placeholder={isEditing ? "••••••••" : "Confirme a senha"}
+                      className={`${formErrors.confirmarSenha ? "border-red-500 focus:ring-red-500" : ""} pr-10`}
+                      aria-invalid={!!formErrors.confirmarSenha}
+                      aria-describedby={formErrors.confirmarSenha ? "confirmarSenha-error" : undefined}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
+                  </div>
+                  {formErrors.confirmarSenha && (
+                    <p id="confirmarSenha-error" className="text-sm text-red-500 mt-1">
+                      {formErrors.confirmarSenha}
                     </p>
                   )}
                 </div>
