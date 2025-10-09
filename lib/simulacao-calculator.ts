@@ -1150,7 +1150,9 @@ export async function salvarSimulacao(
           veiculosSelecionados: formData.veiculosSelecionados,
           tipo: typeof formData.veiculosSelecionados,
           ehArray: Array.isArray(formData.veiculosSelecionados),
-          tamanho: formData.veiculosSelecionados?.length || 0
+          tamanho: formData.veiculosSelecionados?.length || 0,
+          primeiroVeiculo: formData.veiculosSelecionados?.[0],
+          todosVeiculosComRsKm: formData.veiculosSelecionados?.every(v => v.rs_km !== undefined)
         });
         return formData.veiculosSelecionados;
       })(),
