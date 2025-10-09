@@ -113,6 +113,9 @@ interface CustoFixoFormData {
 
   // Média de metro quadrado por mês
   mediaMes: string
+
+  // Valor da diária por pessoa (mão de obra)
+  valorPessoaDia: string
 }
 
 export default function CustoFixoPage() {
@@ -170,7 +173,10 @@ export default function CustoFixoPage() {
     hospedagemSite: "",
 
     // Média de metro quadrado por mês
-    mediaMes: ""
+    mediaMes: "",
+
+    // Valor da diária por pessoa (mão de obra)
+    valorPessoaDia: ""
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -318,7 +324,8 @@ export default function CustoFixoPage() {
             taxasMunicipais: formatNumber(record.taxas_municipais_estaduais_federais),
             sindicatos: formatNumber(record.sindicatos_patronal),
             hospedagemSite: formatNumber(record.hospedagem_manutencao_site),
-            mediaMes: formatSimpleNumber(record.media_mes)
+            mediaMes: formatSimpleNumber(record.media_mes),
+            valorPessoaDia: formatNumber(record.valor_pessoa_dia)
           }
 
           console.log('📝 Dados formatados para o form:', newFormData)
@@ -344,6 +351,9 @@ export default function CustoFixoPage() {
 
   const total = useMemo(() => {
     const sum = Object.entries(formData).reduce((acc, [key, curr]) => {
+      // Excluir campos que não fazem parte do custo fixo mensal
+      if (key === 'mediaMes' || key === 'valorPessoaDia') return acc;
+
       // Se o valor estiver vazio ou for zero
       if (!curr || curr === "0") return acc;
 
@@ -362,10 +372,10 @@ export default function CustoFixoPage() {
       cleanValue = cleanValue.replace(/\./g, '');
       // Substitui vírgula por ponto
       cleanValue = cleanValue.replace(',', '.');
-      
+
       const value = parseFloat(cleanValue) || 0;
       console.log(`Campo ${key}: Original="${curr}" -> Limpo="${cleanValue}" -> Número=${value}`);
-      
+
       return acc + value;
     }, 0);
 
@@ -467,6 +477,7 @@ export default function CustoFixoPage() {
             total: total,
             media_mes: parseFloat((formData.mediaMes || '0').replace(/\./g, '').replace(',', '.')) || 0,
             media_final: mediaFinal,
+            valor_pessoa_dia: parsedData.valorPessoaDia,
             aluguel: parsedData.aluguel,
             irpj_sobre_aluguel: parsedData.irpjSobreAluguel,
             iptu: parsedData.iptu,
@@ -530,6 +541,7 @@ export default function CustoFixoPage() {
             total: total,
             media_mes: parseFloat((formData.mediaMes || '0').replace(/\./g, '').replace(',', '.')) || 0,
             media_final: mediaFinal,
+            valor_pessoa_dia: parsedData.valorPessoaDia,
             aluguel: parsedData.aluguel,
             irpj_sobre_aluguel: parsedData.irpjSobreAluguel,
             iptu: parsedData.iptu,
@@ -733,6 +745,12 @@ export default function CustoFixoPage() {
                       value={formData.beneficios}
                       onChange={(value) => handleChange("beneficios", value)}
                       label="Benefícios (Cesta Básica, Auxílio Educação, etc)"
+                    />
+                    <CurrencyInput
+                      id="valorPessoaDia"
+                      value={formData.valorPessoaDia}
+                      onChange={(value) => handleChange("valorPessoaDia", value)}
+                      label="Valor da Diária por Pessoa (Mão de Obra)"
                     />
                   </div>
                 </Card>
