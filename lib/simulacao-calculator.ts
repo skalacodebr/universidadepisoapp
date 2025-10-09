@@ -250,6 +250,7 @@ export interface SimulacaoResult {
   diasTotais?: number
   custoEquipamentos?: number
   custoVeiculos?: number
+  custoTotalEquipes?: number
 }
 
 // Função auxiliar
@@ -398,7 +399,29 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const { data: custosFixosData } = await supabase.from('custofixo_usuario').select('*').eq('userid', userId).order('created_at', { ascending: false }).limit(1);
 
   const custosFixos = custosFixosData?.[0] || null;
-  const despesasFixasEmpresa = custosFixos ? Number(custosFixos.total) || 0 : 10000;
+
+  // O campo 'total' já contém o valor total mensal dos custos fixos da empresa
+  // O campo 'media_mes' é a produção média mensal em m²
+  // O campo 'media_final' já contém o custo fixo por m² calculado
+  const despesasFixasEmpresaTotal = custosFixos ? Number(custosFixos.total) || 0 : 44310;
+  const producaoMensal = custosFixos ? Number(custosFixos.media_mes) || 10000 : 10000;
+
+  // Usar o custo fixo por m² já calculado ou calcular se não existir
+  const custoFixoPorM2 = custosFixos?.media_final ?
+    Number(custosFixos.media_final) :
+    (producaoMensal > 0 ? despesasFixasEmpresaTotal / producaoMensal : 4.43);
+
+  // Multiplicar pelo total da área da obra
+  const despesasFixasEmpresa = custoFixoPorM2 * areaTotal;
+
+  console.log("🏭 === CÁLCULO DO CUSTO FIXO ===", {
+    despesasFixasEmpresaTotal: `R$ ${despesasFixasEmpresaTotal.toFixed(2)}`,
+    producaoMensal: `${producaoMensal} m²`,
+    custoFixoPorM2: `R$ ${custoFixoPorM2.toFixed(2)}/m²`,
+    areaTotal: `${areaTotal} m²`,
+    despesasFixasEmpresa: `R$ ${despesasFixasEmpresa.toFixed(2)}`,
+    formula: `${custoFixoPorM2.toFixed(2)} × ${areaTotal} = ${despesasFixasEmpresa.toFixed(2)}`
+  });
 
   // Helpers
   const getEquipeQtd = (id: string, tipo: 'concretagem' | 'acabamento' | 'preparacao') => {
@@ -455,8 +478,8 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const valorPorPessoaPorDia = 1373.47;
   const valorHoraExtra = 184.69;
 
-  const diasConcretagem = Math.max(0, parseInt(formData.prazoConcretagem) || 0);
-  const diasAcabamento = Math.max(0, parseInt(formData.prazoAcabamento) || 0);
+  const diasConcretagem = Math.max(0, parseInt(formData.prazoConcretagem) || prazoTotal);
+  const diasAcabamento = Math.max(0, parseInt(formData.prazoAcabamento) || prazoTotal);
   const diasPreparacao = Math.max(0, parseInt(formData.prazoPreparacao) || 0);
   const diasFinalizacao = Math.max(0, parseInt(formData.prazoFinalizacao) || 0);
 
@@ -527,7 +550,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     equipeTotal: pessoasFinalizacao,
     prazo: diasFinalizacao,
     custoFinalizacao,
-    totalEquipe: custoFinalizacao, // CORREÇÃO: Usar apenas custo de finalização
+    totalEquipe: custoFinalizacao,
     percentualTotalEquipe: 0
   };
 
@@ -632,21 +655,21 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     
     // Valores fixos baseados no ID
     if (id === 1) {
-      return { valor: 0.32, nome: nomeTipo }; // Liso polido: R$ 0,32/m²
+      return { valor: 0.12, nome: nomeTipo }; // Vassourado: R$ 0,12/m²
     } else if (id === 2) {
       return { valor: 0.20, nome: nomeTipo }; // Camurçado: R$ 0,20/m²
     } else if (id === 3) {
-      return { valor: 0.12, nome: nomeTipo }; // Vassourado: R$ 0,12/m²
+      return { valor: 0.32, nome: nomeTipo }; // Liso polido: R$ 0,32/m²
     }
     
     // Fallback: tentar pelo nome se o ID não for reconhecido
     const nomeMinusculo = nomeTipo.toLowerCase();
-    if (nomeMinusculo.includes('liso') || nomeMinusculo.includes('polido')) {
-      return { valor: 0.32, nome: nomeTipo };
+    if (nomeMinusculo.includes('vassourado')) {
+      return { valor: 0.12, nome: nomeTipo };
     } else if (nomeMinusculo.includes('camurçado') || nomeMinusculo.includes('camurcado')) {
       return { valor: 0.20, nome: nomeTipo };
-    } else if (nomeMinusculo.includes('vassourado')) {
-      return { valor: 0.12, nome: nomeTipo };
+    } else if (nomeMinusculo.includes('liso') || nomeMinusculo.includes('polido')) {
+      return { valor: 0.32, nome: nomeTipo };
     }
     
     return { valor: 0.20, nome: nomeTipo }; // Padrão: Camurçado
@@ -701,17 +724,22 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     custoExecucao: custoExecucao,
     formula_custoExecucao: `${totalEquipamentos} + ${totalVeiculos} + ${totalInsumos} + ${despesasAdicionais.total} + ${custoTotalMaoObra} = ${custoExecucao}`,
     formula_custoTotalGeral: `${custoExecucao} + ${despesasFixasEmpresa} = ${custoTotalGeral}`,
+    'VALIDAÇÃO': custoExecucao >= custoTotalMaoObra ? '✅ Custo de execução inclui mão de obra' : '❌ ERRO: Custo de execução menor que mão de obra!'
   });
 
   // DESPESAS FIXAS
   const demaisDespesasFixas: DemaisDespesasFixas = {
-    valorEmpresaPorM2: areaTotal > 0 ? despesasFixasEmpresa / areaTotal : 0,
+    valorEmpresaPorM2: custoFixoPorM2,
     valorTotalPorM2: areaTotal > 0 ? custoTotalGeral / areaTotal : 0,
     areaTotalObra: areaTotal,
     despesasFixas: despesasFixasEmpresa,
     percentualDespesasFixas: custoTotalGeral > 0 ? (despesasFixasEmpresa / custoTotalGeral) * 100 : 0,
     custoExecucao: custoExecucao,
-    percentualCustoExecucao: custoTotalGeral > 0 ? (custoExecucao / custoTotalGeral) * 100 : 0
+    percentualCustoExecucao: custoTotalGeral > 0 ? (custoExecucao / custoTotalGeral) * 100 : 0,
+    // Campos adicionais para exibir detalhes do cálculo
+    totalCustosFixos: despesasFixasEmpresaTotal,
+    mediaMes: producaoMensal,
+    mediaFinal: custoFixoPorM2
   };
 
   // CUSTOS DERIVADOS DA VENDA
@@ -929,6 +957,22 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   };
 
   // FINAL
+  // Calcular o custo total real das equipes (incluindo TODAS as partes)
+  const custoTotalEquipesReal = custoPreparacao + custoConcretagem + custoAcabamento + custoFinalizacao + custoTotalHorasExtras;
+  
+  console.log("💰 === CÁLCULO CORRETO DO CUSTO TOTAL DAS EQUIPES ===", {
+    custoPreparacao: `R$ ${custoPreparacao.toFixed(2)}`,
+    custoConcretagem: `R$ ${custoConcretagem.toFixed(2)}`,
+    custoAcabamento: `R$ ${custoAcabamento.toFixed(2)}`,
+    custoFinalizacao: `R$ ${custoFinalizacao.toFixed(2)}`,
+    custoHorasExtraConcretagem: `R$ ${custoHorasExtraConcretagem.toFixed(2)}`,
+    custoHorasExtraAcabamento: `R$ ${custoHorasExtraAcabamento.toFixed(2)}`,
+    custoTotalHorasExtras: `R$ ${custoTotalHorasExtras.toFixed(2)}`,
+    custoTotalEquipesReal: `R$ ${custoTotalEquipesReal.toFixed(2)}`,
+    percentualSobreCustoTotal: `${((custoTotalEquipesReal / custoTotalGeral) * 100).toFixed(2)}%`,
+    formula: `${custoPreparacao} + ${custoConcretagem} + ${custoAcabamento} + ${custoFinalizacao} + ${custoTotalHorasExtras} = ${custoTotalEquipesReal}`
+  });
+  
   const resultadoFinal: SimulacaoResult = {
     dadosTecnicos,
     equipeConcretagemAcabamento: {
@@ -977,6 +1021,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     lucroTotal: margemLucroCalculada,
     custoEquipamentos: totalEquipamentos,
     custoVeiculos: totalVeiculos,
+    custoTotalEquipes: custoTotalEquipesReal,
     diasTotais: prazoTotal + diasPreparacao + diasFinalizacao,
     volumeConcretoM3: concreto,
   };
@@ -1058,9 +1103,9 @@ export async function salvarSimulacao(
         // Somar todos os custos de mão de obra
         const custoEquipeConcretagemAcabamento = resultado.equipeConcretagemAcabamento?.totalEquipe || 0;
         const custoPreparacao = resultado.preparacaoObra?.totalEquipe || 0;
-        const custoFinalizacao = resultado.finalizacaoObra?.custoFinalizacao || 0;
+        const custoFinalizacao = resultado.finalizacaoObra?.totalEquipe || 0;
         const custoMaoObraTotal = custoEquipeConcretagemAcabamento + custoPreparacao + custoFinalizacao;
-        
+
         const custoEquipamentos = resultado.custoEquipamentos || 0;
         const custoVeiculos = resultado.custoVeiculos || 0;
         const custoInsumos = resultado.insumos?.totalInsumos || 0;

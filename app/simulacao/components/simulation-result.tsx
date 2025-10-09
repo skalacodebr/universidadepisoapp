@@ -98,28 +98,13 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
   const insumos = data.insumos || {}
   const demaisDespesasFixas = data.demaisDespesasFixas || {}
   const custoDerivadosVenda = data.custoDerivadosVenda || {}
+
+  // Calcular o custo total da obra corretamente
+  const custoTotalObra = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0)
   const outrosCustos = data.outrosCustos || {}
   const precoVenda = data.precoVenda || {}
   const finalizacaoObra = data.finalizacaoObra || {}
 
-  // Log dos dados de precoVenda recebidos
-  console.log('📊 Dados de precoVenda recebidos:', {
-    precoVenda: precoVenda,
-    resultado1: precoVenda.resultado1,
-    resultadoPercentual: precoVenda.resultadoPercentual,
-    sePrecoVendaPorM2For: precoVenda.sePrecoVendaPorM2For,
-    precoVendaPorM2: precoVenda.precoVendaPorM2
-  })
-
-  // Log dos dados de custos fixos recebidos
-  console.log('📊 Custos fixos recebidos no componente:', {
-    demaisDespesasFixas,
-    valorEmpresaPorM2: demaisDespesasFixas.valorEmpresaPorM2,
-    valorTotalPorM2: demaisDespesasFixas.valorTotalPorM2,
-    areaTotalObra: demaisDespesasFixas.areaTotalObra,
-    despesasFixas: demaisDespesasFixas.despesasFixas,
-    percentualDespesasFixas: demaisDespesasFixas.percentualDespesasFixas
-  })
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto p-4">
@@ -260,19 +245,19 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-bold">Total Equipe:</span>
-              <span className="font-bold">{(() => {
-                const custoTotalEquipes = (preparacaoObra.custoPreparacao || 0) + 
-                  (equipeConcretagemAcabamento.custoEquipe || 0) + 
-                  (finalizacaoObra.custoFinalizacao || 0) + 
-                  (equipeConcretagemAcabamento.custoHEEquipeConcretagem || 0) + 
-                  (equipeConcretagemAcabamento.custoHEAcabamento || 0);
-                
-                // Calcular percentual correto: custoEquipes / custoTotal
-                const custoTotalGeral = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0);
-                const percentualCorreto = custoTotalGeral > 0 ? (custoTotalEquipes / custoTotalGeral) * 100 : 0;
-                
-                return `${formatarMoeda(custoTotalEquipes)} (${formatarPercentual(percentualCorreto)})`;
-              })()}</span>
+              <span className="font-bold">
+                {(() => {
+                  const totalEquipes = (preparacaoObra.custoPreparacao || 0) +
+                    (equipeConcretagemAcabamento.custoEquipe || 0) +
+                    (equipeConcretagemAcabamento.custoHEEquipeConcretagem || 0) +
+                    (equipeConcretagemAcabamento.custoHEAcabamento || 0) +
+                    (finalizacaoObra.custoFinalizacao || 0);
+
+                  const percentual = custoTotalObra > 0 ? (totalEquipes / custoTotalObra) * 100 : 0;
+
+                  return `${formatarMoeda(totalEquipes)} (${formatarPercentual(percentual)})`;
+                })()}
+              </span>
             </div>
           </div>
         </CardContent>
@@ -309,13 +294,18 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           <div className="bg-orange-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-bold">Total equipamentos:</span>
-              <span className="font-bold">{formatarMoeda(equipamentosCorrigidos.totalEquipamentos)} ({formatarPercentual(equipamentosCorrigidos.percentualTotalEquipamentos || 0)})</span>
+              <span className="font-bold">
+                {(() => {
+                  const percentual = custoTotalObra > 0 ? (equipamentosCorrigidos.totalEquipamentos / custoTotalObra) * 100 : 0;
+                  return `${formatarMoeda(equipamentosCorrigidos.totalEquipamentos)} (${formatarPercentual(percentual)})`;
+                })()}
+              </span>
             </div>
             <div className="flex justify-between items-center mt-2">
               <span>Qtd. equipamento:</span>
               <span>{equipamentosCorrigidos.quantidadeEquipamentos}</span>
             </div>
-            </div>
+          </div>
           </CardContent>
         </Card>
 
@@ -368,7 +358,12 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           <div className="bg-green-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-bold">Total veículos:</span>
-              <span className="font-bold">{formatarMoeda(veiculos.totalVeiculos)} ({formatarPercentual(veiculos.percentualTotalVeiculos)})</span>
+              <span className="font-bold">
+                {(() => {
+                  const percentual = custoTotalObra > 0 ? (veiculos.totalVeiculos / custoTotalObra) * 100 : 0;
+                  return `${formatarMoeda(veiculos.totalVeiculos)} (${formatarPercentual(percentual)})`;
+                })()}
+              </span>
             </div>
           </div>
         </CardContent>
@@ -400,9 +395,14 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           <div className="bg-purple-50 p-4 rounded-lg">
             <div className="flex justify-between items-center">
               <span className="font-bold">Total Insumos:</span>
-              <span className="font-bold">{formatarMoeda(insumos.totalInsumos)} ({formatarPercentual(insumos.percentualTotalInsumos || 0)})</span>
+              <span className="font-bold">
+                {(() => {
+                  const percentual = custoTotalObra > 0 ? (insumos.totalInsumos / custoTotalObra) * 100 : 0;
+                  return `${formatarMoeda(insumos.totalInsumos)} (${formatarPercentual(percentual)})`;
+                })()}
+              </span>
             </div>
-            </div>
+          </div>
           </CardContent>
         </Card>
 
@@ -418,9 +418,9 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
               <div className="text-xl font-bold text-blue-700">
-                {formatarMoeda(demaisDespesasFixas.totalCustosFixos || demaisDespesasFixas.despesasFixas)}
+                {formatarMoeda(demaisDespesasFixas.totalCustosFixos || 0)}
               </div>
-              <div className="text-sm text-gray-600 mt-1">Total dos Custos Fixos</div>
+              <div className="text-sm text-gray-600 mt-1">Custos Fixos Mensais da Empresa</div>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-xl font-bold text-green-700">
@@ -432,14 +432,19 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
               <div className="text-xl font-bold text-purple-700">
                 {formatarMoeda(demaisDespesasFixas.mediaFinal || demaisDespesasFixas.valorEmpresaPorM2)}
               </div>
-              <div className="text-sm text-gray-600 mt-1">Média Final (por m²)</div>
+              <div className="text-sm text-gray-600 mt-1">Custo Fixo por m²</div>
             </div>
+          </div>
+          <div className="bg-yellow-50 p-4 rounded-lg mb-4">
+            <p className="text-sm text-gray-600 text-center">
+              <strong>Cálculo do Custo Fixo:</strong> {formatarMoeda(demaisDespesasFixas.mediaFinal || demaisDespesasFixas.valorEmpresaPorM2)}/m² × {formatarNumero(demaisDespesasFixas.areaTotalObra, 0)} m² = {formatarMoeda(demaisDespesasFixas.despesasFixas)}
+            </p>
           </div>
           <div className="bg-red-50 p-4 rounded-lg">
             <p className="font-bold text-center mb-2">Total de custos de execução do piso</p>
             <div className="flex justify-between items-center">
-              <span className="font-bold">Total dos Custos Fixos:</span>
-              <span className="font-bold">{formatarMoeda(demaisDespesasFixas.totalCustosFixos || demaisDespesasFixas.despesasFixas)} ({formatarPercentual(demaisDespesasFixas.percentualDespesasFixas || 0)})</span>
+              <span className="font-bold">Custo Fixo Proporcional da Obra:</span>
+              <span className="font-bold">{formatarMoeda(demaisDespesasFixas.despesasFixas)} ({formatarPercentual(demaisDespesasFixas.percentualDespesasFixas || 0)})</span>
             </div>
           </div>
         </CardContent>
@@ -578,42 +583,18 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                   <span className="font-medium">Custo + Lucro:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg">{(() => {
-                    const custoExecucao = demaisDespesasFixas.custoExecucao || 0;
-                    const despesasFixas = demaisDespesasFixas.despesasFixas || 0;
-                    const custoBase = custoExecucao + despesasFixas;
-                    
-                    // SEMPRE mostrar o lucro calculado (não o manual)
-                    const lucroValor = custoDerivadosVenda.margemLucro || 0;
-                    
-                    console.log("🔧 Debug valores Custo + Lucro:", {
-                      custoExecucao, 
-                      despesasFixas, 
-                      custoBase,
-                      lucroValor,
-                      resultado: `${formatarMoeda(custoBase)} + ${formatarMoeda(lucroValor)}`
-                    });
-                    
-                    return `${formatarMoeda(custoBase)} + ${formatarMoeda(lucroValor)}`;
-                  })()}</span>
+                  <span className="font-bold text-lg">
+                    {formatarMoeda(custoTotalObra)} +
+                    {formatarMoeda(custoDerivadosVenda.margemLucro || 0)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Total:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-bold text-lg text-blue-600">{(() => {
-                    // SEMPRE mostrar o preço total calculado (preço/m² × área)
-                    const precoTotalCalculado = precoVenda.precoVendaPorM2 * dadosTecnicos.areaTotal;
-                    
-                    console.log("🔧 Debug Total calculado:", {
-                      precoVendaPorM2: precoVenda.precoVendaPorM2,
-                      areaTotal: dadosTecnicos.areaTotal,
-                      precoTotalCalculado,
-                      resultado: formatarMoeda(precoTotalCalculado)
-                    });
-                    
-                    return formatarMoeda(precoTotalCalculado);
-                  })()}</span>
+                  <span className="font-bold text-lg text-blue-600">
+                    {formatarMoeda(data.valorTotal || 0)}
+                  </span>
                 </div>
               </div>
             </div>

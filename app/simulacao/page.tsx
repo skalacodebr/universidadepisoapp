@@ -480,7 +480,13 @@ export default function SimulacaoPage() {
       })
 
       const custosFixosEmpresa = custosFixosData?.[0]
-      const despesasFixasEmpresa = custosFixosEmpresa ? Number(custosFixosEmpresa.total) || 0 : 10000
+      // Calcular o custo fixo proporcional à área da obra
+      const totalCustosFixos = custosFixosEmpresa?.total ? Number(custosFixosEmpresa.total) : 44310
+      const producaoMensal = custosFixosEmpresa?.media_mes ? Number(custosFixosEmpresa.media_mes) : 10000
+      const custoFixoPorM2 = custosFixosEmpresa?.media_final ?
+        Number(custosFixosEmpresa.media_final) :
+        (producaoMensal > 0 ? totalCustosFixos / producaoMensal : 4.43)
+      const despesasFixasEmpresa = custoFixoPorM2 * (obra.area_total_metros_quadrados || 0)
       
       // Calcular alíquota baseada no faturamento
       let faturamentoMaximo = 360000 // valor padrão
@@ -625,34 +631,29 @@ export default function SimulacaoPage() {
 
       console.log("🔧 Debug custosFixosAdicionais:", custosFixosAdicionais);
 
-      // CORREÇÃO: Usar custo de execução salvo no banco, não recalcular
-      const custoExecucao = custoTotalMaoObraSalvo + 
-                           custoEquipamentos + 
-                           (obra.custo_veiculos || 0) + 
+      // Calcular custo de execução (sem despesas fixas)
+      const custoExecucao = custoTotalMaoObraSalvo +
+                           custoEquipamentos +
+                           (obra.custo_veiculos || 0) +
                            custosFixosAdicionais.total;
-      
-      console.log("🔧 Debug custoExecucao ANTES da correção:", {
+
+      console.log("🔧 Debug custoExecucao:", {
         custoTotalMaoObraSalvo,
         custoEquipamentos,
         custoVeiculos: obra.custo_veiculos || 0,
         custosFixosAdicionaisTotal: custosFixosAdicionais.total,
         custoExecucaoCalculado: custoExecucao,
-        custoExecucaoSalvo: obra.custo_total_obra ? (obra.custo_total_obra - (custosFixosData?.[0]?.total || 0)) : null
+        custoTotalObraSalvo: obra.custo_total_obra
       });
-      
-      // Se temos custo total salvo, usar ele subtraindo as despesas fixas
-      const custoExecucaoCorreto = obra.custo_total_obra ? 
-        (obra.custo_total_obra - (custosFixosData?.[0]?.total || 0)) : custoExecucao;
+
+      // Usar o custo total da obra diretamente (já inclui despesas fixas)
+      const custoTotalObra = obra.custo_total_obra || (custoExecucao + despesasFixasEmpresa);
+      const custoExecucaoCorreto = custoExecucao;
 
       // Calcular valor total e lucro
       const valorTotal = (obra.preco_venda_metro_quadrado || 0) * (obra.area_total_metros_quadrados || 0)
       const lucroTotal = valorTotal - custoExecucaoCorreto
       
-      console.log("🔧 Debug custoExecucao DEPOIS da correção:", {
-        custoExecucaoAnterior: custoExecucao,
-        custoExecucaoCorreto: custoExecucaoCorreto,
-        diferenca: custoExecucao - custoExecucaoCorreto
-      });
 
       // Buscar nome do tipo de acabamento
       let tipoAcabamentoData = null;
@@ -793,23 +794,21 @@ export default function SimulacaoPage() {
           area: obra.area_total_metros_quadrados || 0,
           dias: obra.prazo_obra || 0,
           valorPorM2: valorInsumosPorM2,
-          totalInsumos: valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0),
-          percentualTotalInsumos: valorTotal > 0 ? ((valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0)) / valorTotal) * 100 : 0
+          totalInsumos: obra.custo_insumos || (valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0)),
+          percentualTotalInsumos: valorTotal > 0 ? ((obra.custo_insumos || 0) / valorTotal) * 100 : 0
         },
         demaisDespesasFixas: {
-          valorEmpresaPorM2: custosFixosEmpresa?.media_final || 0, // Usar media_final da tabela
-          valorTotalPorM2: obra.area_total_metros_quadrados > 0 ? (custoExecucaoCorreto + despesasFixasEmpresa) / obra.area_total_metros_quadrados : 0,
+          valorEmpresaPorM2: custosFixosEmpresa?.media_final || 0,
+          valorTotalPorM2: obra.area_total_metros_quadrados > 0 ? custoTotalObra / obra.area_total_metros_quadrados : 0,
           areaTotalObra: obra.area_total_metros_quadrados || 0,
           despesasFixas: despesasFixasEmpresa,
-          percentualDespesasFixas: (custoExecucaoCorreto + despesasFixasEmpresa) > 0 ? (despesasFixasEmpresa / (custoExecucaoCorreto + despesasFixasEmpresa)) * 100 : 0,
+          percentualDespesasFixas: custoTotalObra > 0 ? (despesasFixasEmpresa / custoTotalObra) * 100 : 0,
           custoExecucao: custoExecucaoCorreto,
-          percentualCustoExecucao: (custoExecucaoCorreto + despesasFixasEmpresa) > 0 ? (custoExecucaoCorreto / (custoExecucaoCorreto + despesasFixasEmpresa)) * 100 : 0,
-          // Adicionar campos específicos dos custos fixos
+          percentualCustoExecucao: custoTotalObra > 0 ? (custoExecucaoCorreto / custoTotalObra) * 100 : 0,
           totalCustosFixos: custosFixosEmpresa?.total || 0,
           mediaMes: custosFixosEmpresa?.media_mes || 0,
           mediaFinal: custosFixosEmpresa?.media_final || 0,
-          // Custo total usado na fórmula do preço de venda
-          custoTotalObra: obra.custo_total_obra || (custoExecucaoCorreto + despesasFixasEmpresa)
+          custoTotalObra: custoTotalObra
         },
         custoDerivadosVenda: {
           faturamento12Meses: faturamentoMaximo,
@@ -851,7 +850,7 @@ export default function SimulacaoPage() {
           });
           
           return {
-            precoVendaPorM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0,
+            precoVendaPorM2: obra.preco_venda_metro_quadrado_calculo || 0,
             sePrecoVendaPorM2For: obra.preco_venda_metro_quadrado || 0,
             valorTotal: obra.valor_total || 0,
             resultado1: resultado1,
