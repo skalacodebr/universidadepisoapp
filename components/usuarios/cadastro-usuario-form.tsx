@@ -4,9 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import { DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle2, Info, X } from "lucide-react"
@@ -26,20 +24,6 @@ interface Usuario {
   encargos?: string
   custoTotal?: string
   status?: string
-  permissoes?: {
-    gestaoObras: boolean
-    relatoriosFinanceiros: boolean
-    fluxoCaixa: boolean
-    registroDespesas: boolean
-  }
-  permissoesPersonalizadas?: {
-    combustivel: boolean
-    refeicao: boolean
-    hospedagem: boolean
-    aluguelEquipamentos: boolean
-    materiais: boolean
-    outros: boolean
-  }
 }
 
 interface CadastroUsuarioFormProps {
@@ -73,24 +57,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
-
-  // Estados para as permissões
-  const [permissoes, setPermissoes] = useState({
-    gestaoObras: usuario?.permissoes?.gestaoObras || false,
-    relatoriosFinanceiros: usuario?.permissoes?.relatoriosFinanceiros || false,
-    fluxoCaixa: usuario?.permissoes?.fluxoCaixa || false,
-    registroDespesas: usuario?.permissoes?.registroDespesas || false,
-  })
-
-  // Estados para as permissões personalizadas
-  const [permissoesPersonalizadas, setPermissoesPersonalizadas] = useState({
-    combustivel: usuario?.permissoesPersonalizadas?.combustivel || true,
-    refeicao: usuario?.permissoesPersonalizadas?.refeicao || true,
-    hospedagem: usuario?.permissoesPersonalizadas?.hospedagem || true,
-    aluguelEquipamentos: usuario?.permissoesPersonalizadas?.aluguelEquipamentos || false,
-    materiais: usuario?.permissoesPersonalizadas?.materiais || false,
-    outros: usuario?.permissoesPersonalizadas?.outros || false,
-  })
 
   // Função para formatar o CPF (000.000.000-00)
   const formatCPF = (value: string) => {
@@ -155,22 +121,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
     calcularCustoTotal()
   }, [salario, beneficios, encargos])
 
-  // Função para lidar com a mudança nas permissões
-  const handlePermissaoChange = (permissao: string, checked: boolean) => {
-    setPermissoes({
-      ...permissoes,
-      [permissao]: checked,
-    })
-  }
-
-  // Função para lidar com a mudança nas permissões personalizadas
-  const handlePermissaoPersonalizadaChange = (permissao: string, checked: boolean) => {
-    setPermissoesPersonalizadas({
-      ...permissoesPersonalizadas,
-      [permissao]: checked,
-    })
-  }
-
   // Função para validar o formulário
   const validateForm = () => {
     const errors: FormErrors = {}
@@ -205,9 +155,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
     setIsSubmitting(true)
 
     try {
-      // Simulação de uma chamada de API
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
       const dadosUsuario = {
         nome,
         cpf,
@@ -219,25 +166,49 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
         encargos,
         custoTotal,
         status,
-        permissoes,
-        permissoesPersonalizadas,
       }
 
-      console.log(dadosUsuario)
-
-      setSubmitSuccess(true)
-
-      // Chamar a função onSave se ela existir
-      if (onSave) {
-        onSave(dadosUsuario)
+      let response
+      if (isEditing && usuario?.id) {
+        // Atualizar usuário existente
+        response = await fetch(`/api/usuarios/${usuario.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(dadosUsuario),
+        })
+      } else {
+        // Criar novo usuário
+        response = await fetch("/api/usuarios", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(dadosUsuario),
+        })
       }
 
-      // Fechar o modal após 1.5 segundos
-      setTimeout(() => {
-        onClose()
-      }, 1500)
-    } catch (error) {
+      const result = await response.json()
+
+      if (result.success) {
+        setSubmitSuccess(true)
+
+        // Chamar a função onSave se ela existir
+        if (onSave) {
+          onSave(dadosUsuario)
+        }
+
+        // Fechar o modal após 1.5 segundos
+        setTimeout(() => {
+          onClose()
+        }, 1500)
+      } else {
+        throw new Error(result.message || "Erro ao salvar usuário")
+      }
+    } catch (error: any) {
       console.error("Erro ao salvar usuário:", error)
+      alert(error.message || "Erro ao salvar usuário. Tente novamente.")
     } finally {
       setIsSubmitting(false)
     }
@@ -251,8 +222,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
       } else {
         validateForm()
       }
-    } else if (activeTab === "dados-financeiros") {
-      setActiveTab("permissoes")
     }
   }
 
@@ -260,8 +229,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
   const prevTab = () => {
     if (activeTab === "dados-financeiros") {
       setActiveTab("dados-pessoais")
-    } else if (activeTab === "permissoes") {
-      setActiveTab("dados-financeiros")
     }
   }
 
@@ -300,7 +267,7 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
 
       <div className="space-y-6 max-h-[70vh] overflow-y-auto px-8 pb-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid grid-cols-3 mb-8 rounded-lg bg-gray-100 p-1">
+          <TabsList className="grid grid-cols-2 mb-8 rounded-lg bg-gray-100 p-1">
             <TabsTrigger
               value="dados-pessoais"
               className={cn(
@@ -315,12 +282,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
               className="rounded-md data-[state=active]:bg-[#007EA3] data-[state=active]:text-white transition-all"
             >
               Dados Financeiros
-            </TabsTrigger>
-            <TabsTrigger
-              value="permissoes"
-              className="rounded-md data-[state=active]:bg-[#007EA3] data-[state=active]:text-white transition-all"
-            >
-              Permissões
             </TabsTrigger>
           </TabsList>
 
@@ -553,139 +514,6 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
               </div>
             </div>
 
-            <div className="flex justify-between gap-4 pt-6">
-              <Button variant="outline" onClick={prevTab}>
-                Voltar
-              </Button>
-              <Button className="bg-[#007EA3] hover:bg-[#006a8a]" onClick={nextTab}>
-                Próximo
-              </Button>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="permissoes" className="space-y-6">
-            {/* Permissões de Acesso */}
-            <div className="space-y-8">
-              <h3 className="text-lg font-medium mb-6">Permissões de Acesso</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="gestao-obras"
-                    checked={permissoes.gestaoObras}
-                    onCheckedChange={(checked) => handlePermissaoChange("gestaoObras", checked === true)}
-                  />
-                  <Label htmlFor="gestao-obras" className="cursor-pointer">
-                    Gestão de Obras
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="relatorios-financeiros"
-                    checked={permissoes.relatoriosFinanceiros}
-                    onCheckedChange={(checked) => handlePermissaoChange("relatoriosFinanceiros", checked === true)}
-                  />
-                  <Label htmlFor="relatorios-financeiros" className="cursor-pointer">
-                    Relatórios Financeiros
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="fluxo-caixa"
-                    checked={permissoes.fluxoCaixa}
-                    onCheckedChange={(checked) => handlePermissaoChange("fluxoCaixa", checked === true)}
-                  />
-                  <Label htmlFor="fluxo-caixa" className="cursor-pointer">
-                    Fluxo de Caixa
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="registro-despesas"
-                    checked={permissoes.registroDespesas}
-                    onCheckedChange={(checked) => handlePermissaoChange("registroDespesas", checked === true)}
-                  />
-                  <Label htmlFor="registro-despesas" className="cursor-pointer">
-                    Registro de Despesas
-                  </Label>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Permissões Personalizadas */}
-            <div className="space-y-8">
-              <h3 className="text-lg font-medium mb-2">Permissões Personalizadas</h3>
-              <p className="text-sm text-gray-500 mb-3">
-                Quais tipos de despesas podem ser registrados no aplicativo móvel:
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="combustivel"
-                    checked={permissoesPersonalizadas.combustivel}
-                    onCheckedChange={(checked) => handlePermissaoPersonalizadaChange("combustivel", checked === true)}
-                  />
-                  <Label htmlFor="combustivel" className="cursor-pointer">
-                    Combustível
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="refeicao"
-                    checked={permissoesPersonalizadas.refeicao}
-                    onCheckedChange={(checked) => handlePermissaoPersonalizadaChange("refeicao", checked === true)}
-                  />
-                  <Label htmlFor="refeicao" className="cursor-pointer">
-                    Refeição
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="hospedagem"
-                    checked={permissoesPersonalizadas.hospedagem}
-                    onCheckedChange={(checked) => handlePermissaoPersonalizadaChange("hospedagem", checked === true)}
-                  />
-                  <Label htmlFor="hospedagem" className="cursor-pointer">
-                    Hospedagem
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="aluguel-equipamentos"
-                    checked={permissoesPersonalizadas.aluguelEquipamentos}
-                    onCheckedChange={(checked) =>
-                      handlePermissaoPersonalizadaChange("aluguelEquipamentos", checked === true)
-                    }
-                  />
-                  <Label htmlFor="aluguel-equipamentos" className="cursor-pointer">
-                    Aluguel de Equipamentos
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="materiais"
-                    checked={permissoesPersonalizadas.materiais}
-                    onCheckedChange={(checked) => handlePermissaoPersonalizadaChange("materiais", checked === true)}
-                  />
-                  <Label htmlFor="materiais" className="cursor-pointer">
-                    Materiais
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="outros"
-                    checked={permissoesPersonalizadas.outros}
-                    onCheckedChange={(checked) => handlePermissaoPersonalizadaChange("outros", checked === true)}
-                  />
-                  <Label htmlFor="outros" className="cursor-pointer">
-                    Outros
-                  </Label>
-                </div>
-              </div>
-            </div>
-
-            {/* Botões de Ação */}
             <div className="flex justify-between gap-4 pt-6">
               <Button variant="outline" onClick={prevTab}>
                 Voltar

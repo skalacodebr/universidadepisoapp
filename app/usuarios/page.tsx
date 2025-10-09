@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Search, Plus, Edit, Trash2, Shield, MoreHorizontal } from "lucide-react"
+import { ChevronLeft, ChevronRight, Search, Plus, Edit, Trash2, MoreHorizontal } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
@@ -14,7 +14,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 // Atualizar o import do Dialog para incluir o DialogTrigger
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { CadastroUsuarioForm } from "@/components/usuarios/cadastro-usuario-form"
-import { ConfigurarPermissoesForm } from "@/components/usuarios/configurar-permissoes-form"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,74 +31,41 @@ export default function Usuarios() {
   const [statusFilter, setStatusFilter] = useState("todos")
   const [cargoFilter, setCargoFilter] = useState("todos")
   const [isAddUserDialogOpen, setIsAddUserDialogOpen] = useState(false)
-  const [isPermissoesDialogOpen, setIsPermissoesDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<any>(null)
-  const [usuarios, setUsuarios] = useState([
-    {
-      id: 1,
-      nome: "João Silva",
-      cpf: "123.456.789-00",
-      cargo: "Engenheiro Civil",
-      status: "Ativo",
-    },
-    {
-      id: 2,
-      nome: "Maria Oliveira",
-      cpf: "987.654.321-00",
-      cargo: "Gerente de Projetos",
-      status: "Ativo",
-    },
-    {
-      id: 3,
-      nome: "Pedro Santos",
-      cpf: "456.789.123-00",
-      cargo: "Técnico de Obras",
-      status: "Ativo",
-    },
-    {
-      id: 4,
-      nome: "Ana Souza",
-      cpf: "789.123.456-00",
-      cargo: "Analista Financeiro",
-      status: "Inativo",
-    },
-    {
-      id: 5,
-      nome: "Carlos Ferreira",
-      cpf: "321.654.987-00",
-      cargo: "Supervisor de Obras",
-      status: "Ativo",
-    },
-    {
-      id: 6,
-      nome: "Juliana Costa",
-      cpf: "654.987.321-00",
-      cargo: "Assistente Administrativo",
-      status: "Inativo",
-    },
-  ])
+  const [usuarios, setUsuarios] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false)
   const [userToChangeStatus, setUserToChangeStatus] = useState<any>(null)
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<any>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
-  // Função para adicionar um novo usuário
-  const adicionarUsuario = (novoUsuario: any) => {
-    // Gerar um ID único para o novo usuário
-    const id = usuarios.length > 0 ? Math.max(...usuarios.map((u) => u.id)) + 1 : 1
+  // Carregar usuários do banco ao montar o componente
+  useEffect(() => {
+    carregarUsuarios()
+  }, [])
 
-    // Adicionar o novo usuário à lista com status padrão "Ativo"
-    setUsuarios([
-      ...usuarios,
-      {
-        ...novoUsuario,
-        id,
-        status: "Ativo",
-      },
-    ])
+  // Função para carregar usuários
+  const carregarUsuarios = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch("/api/usuarios")
+      const result = await response.json()
+
+      if (result.success) {
+        setUsuarios(result.data)
+      } else {
+        console.error("Erro ao carregar usuários:", result.message)
+      }
+    } catch (error) {
+      console.error("Erro ao carregar usuários:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
+
 
   // Função para alternar o status do usuário
   const toggleUserStatus = (user: any) => {
@@ -127,14 +93,32 @@ export default function Usuarios() {
   }
 
   // Função para confirmar a exclusão do usuário
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!userToDelete) return
 
-    // Remove o usuário da lista
-    setUsuarios(usuarios.filter((u) => u.id !== userToDelete.id))
+    setIsDeleting(true)
 
-    setIsDeleteDialogOpen(false)
-    setUserToDelete(null)
+    try {
+      const response = await fetch(`/api/usuarios/${userToDelete.id}`, {
+        method: "DELETE",
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Remove o usuário da lista
+        setUsuarios(usuarios.filter((u) => u.id !== userToDelete.id))
+        setIsDeleteDialogOpen(false)
+        setUserToDelete(null)
+      } else {
+        alert(result.message || "Erro ao excluir usuário")
+      }
+    } catch (error: any) {
+      console.error("Erro ao excluir usuário:", error)
+      alert("Erro ao excluir usuário. Tente novamente.")
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   // Filtrar usuários com base nos filtros e termo de busca
@@ -179,12 +163,6 @@ export default function Usuarios() {
   const openEditUserDialog = (user: any) => {
     setSelectedUser(user)
     setIsAddUserDialogOpen(true)
-  }
-
-  // Abrir modal de configurar permissões
-  const openPermissoesDialog = (user: any) => {
-    setSelectedUser(user)
-    setIsPermissoesDialogOpen(true)
   }
 
   // Adicionar estas funções para controlar a paginação antes do return
@@ -331,42 +309,74 @@ export default function Usuarios() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {getCurrentPageItems().map((usuario) => (
-                  <tr key={usuario.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.nome}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.cpf}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.cargo}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">{renderStatusBadge(usuario.status)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                      <div className="flex justify-center">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="cursor-pointer" onClick={() => openEditUserDialog(usuario)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="cursor-pointer" onClick={() => openPermissoesDialog(usuario)}>
-                              <Shield className="h-4 w-4 mr-2" />
-                              Permissões
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-red-600 cursor-pointer"
-                              onClick={() => openDeleteDialog(usuario)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Excluir
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-3">
+                        <svg
+                          className="animate-spin h-8 w-8 text-[#007EA3]"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        <p className="text-gray-500">Carregando usuários...</p>
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : getCurrentPageItems().length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      Nenhum usuário encontrado
+                    </td>
+                  </tr>
+                ) : (
+                  getCurrentPageItems().map((usuario) => (
+                    <tr key={usuario.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.nome}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.cpf}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{usuario.cargo}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">{renderStatusBadge(usuario.status)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
+                        <div className="flex justify-center">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-700">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem className="cursor-pointer" onClick={() => openEditUserDialog(usuario)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-red-600 cursor-pointer"
+                                onClick={() => openDeleteDialog(usuario)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -432,25 +442,13 @@ export default function Usuarios() {
                 usuario={selectedUser}
                 onClose={() => setIsAddUserDialogOpen(false)}
                 isEditing={!!selectedUser}
-                onSave={(dadosUsuario) => {
-                  if (selectedUser) {
-                    // Atualizar usuário existente
-                    setUsuarios(usuarios.map((u) => (u.id === selectedUser.id ? { ...u, ...dadosUsuario } : u)))
-                  } else {
-                    // Adicionar novo usuário
-                    adicionarUsuario(dadosUsuario)
-                  }
+                onSave={() => {
+                  // Recarregar a lista de usuários após salvar
+                  carregarUsuarios()
                   setIsAddUserDialogOpen(false)
                 }}
               />
             </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal de Configurar Permissões */}
-        <Dialog open={isPermissoesDialogOpen} onOpenChange={setIsPermissoesDialogOpen}>
-          <DialogContent className="sm:max-w-[900px] p-6 overflow-hidden">
-            <ConfigurarPermissoesForm usuario={selectedUser} onClose={() => setIsPermissoesDialogOpen(false)} />
           </DialogContent>
         </Dialog>
 
@@ -492,16 +490,45 @@ export default function Usuarios() {
               </AlertDialogTitle>
               <AlertDialogDescription className="text-center text-gray-600 mt-3">
                 Tem certeza que deseja excluir o usuário <span className="font-semibold">{userToDelete?.nome}</span>?
-                <p className="mt-2 text-red-600">Esta ação não poderá ser desfeita.</p>
+                <p className="mt-2 text-red-600 font-medium">Esta ação não poderá ser desfeita.</p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="flex flex-col sm:flex-row gap-2 mt-6">
-              <AlertDialogCancel className="w-full sm:w-auto border-gray-300">Cancelar</AlertDialogCancel>
+              <AlertDialogCancel className="w-full sm:w-auto border-gray-300" disabled={isDeleting}>
+                Cancelar
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={confirmDelete}
+                disabled={isDeleting}
                 className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
               >
-                Confirmar Exclusão
+                {isDeleting ? (
+                  <div className="flex items-center justify-center">
+                    <svg
+                      className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Excluindo...
+                  </div>
+                ) : (
+                  "Confirmar Exclusão"
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
