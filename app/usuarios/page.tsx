@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { ChevronLeft, ChevronRight, Search, Plus, Edit, Trash2, MoreHorizontal } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,6 +28,7 @@ import {
 
 export default function Usuarios() {
   const router = useRouter()
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("todos")
   const [cargoFilter, setCargoFilter] = useState("todos")
@@ -42,10 +44,18 @@ export default function Usuarios() {
   const [userToDelete, setUserToDelete] = useState<any>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Carregar usuários do banco ao montar o componente
+  // Verificar permissões ao montar o componente
   useEffect(() => {
+    if (!user) return
+
+    // Verificar se o usuário é Administrador Geral
+    if (user.cargo !== "Administrador Geral") {
+      router.push("/dashboard")
+      return
+    }
+
     carregarUsuarios()
-  }, [])
+  }, [user, router])
 
   // Função para carregar usuários
   const carregarUsuarios = async () => {

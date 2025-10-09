@@ -14,6 +14,7 @@ interface CustomUser {
   email: string
   cpf: string
   cargos_id: number
+  cargo?: string // Nome do cargo (carregado dinamicamente)
   status: boolean
   salario: number
   beneficios: string
@@ -57,7 +58,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const storedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
+          const userData = JSON.parse(storedUser);
+
+          // Carregar nome do cargo se não estiver presente
+          if (!userData.cargo && userData.cargos_id) {
+            const supabase = getSupabaseClient();
+            const { data: cargoData } = await supabase
+              .from("cargos")
+              .select("nome")
+              .eq("id", userData.cargos_id)
+              .single();
+
+            if (cargoData) {
+              userData.cargo = cargoData.nome;
+              // Atualizar no storage
+              const storage = localStorage.getItem("user") ? localStorage : sessionStorage;
+              storage.setItem("user", JSON.stringify(userData));
+            }
+          }
+
+          setUser(userData);
           setIsAuthenticated(true);
         }
       } catch (error) {
@@ -145,40 +165,55 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       
       const { token: customToken } = tokenData
       
-      // 4. Armazenar dados na sessão
+      // 4. Buscar nome do cargo
+      console.log("👔 Buscando nome do cargo...");
+      const { data: cargoData } = await supabase
+        .from("cargos")
+        .select("nome")
+        .eq("id", data.cargos_id)
+        .single();
+
+      const cargoNome = cargoData?.nome || "Não definido";
+      console.log("✅ Cargo carregado:", cargoNome);
+
+      // 5. Armazenar dados na sessão
       console.log("💾 Armazenando dados na sessão...");
       const storage = rememberMe ? localStorage : sessionStorage
       const storageType = rememberMe ? "localStorage" : "sessionStorage";
-      
+
       try {
         storage.setItem("custom_token", customToken)
         const { senha, ...userData } = data
-        storage.setItem("user", JSON.stringify(userData))
-        
+        const userDataComCargo = { ...userData, cargo: cargoNome }
+        storage.setItem("user", JSON.stringify(userDataComCargo))
+
         console.log("✅ Dados armazenados com sucesso:", {
           storageType,
-          userDataKeys: Object.keys(userData),
+          userDataKeys: Object.keys(userDataComCargo),
           tokenArmazenado: !!storage.getItem("custom_token"),
-          userArmazenado: !!storage.getItem("user")
+          userArmazenado: !!storage.getItem("user"),
+          cargo: cargoNome
         });
       } catch (storageError) {
         console.error("❌ Erro ao armazenar dados:", storageError);
         return { success: false, message: "Erro ao salvar dados da sessão" }
       }
 
-      // 5. Atualizar cliente Supabase e estado
+      // 6. Atualizar cliente Supabase e estado
       console.log("🔄 Atualizando cliente Supabase e estado da aplicação...");
       try {
         updateSupabaseClientToken(customToken);
         const { senha, ...userData } = data
-        setUser(userData as CustomUser)
+        const userDataComCargo = { ...userData, cargo: cargoNome } as CustomUser
+        setUser(userDataComCargo)
         setIsAuthenticated(true)
-        
+
         console.log("✅ Estado atualizado com sucesso:", {
           userSet: true,
           authenticated: true,
-          finalUserId: userData.id,
-          finalUserName: userData.nome
+          finalUserId: userDataComCargo.id,
+          finalUserName: userDataComCargo.nome,
+          finalUserCargo: userDataComCargo.cargo
         });
       } catch (stateError) {
         console.error("❌ Erro ao atualizar estado:", stateError);

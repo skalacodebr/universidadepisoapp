@@ -12,16 +12,27 @@ export function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
-  const menuItems = [
+  // Verificar se o usuário é Administrador Geral
+  const isAdmin = user?.cargo === "Administrador Geral"
+
+  const allMenuItems = [
     { icon: <BarChart3 className="h-5 w-5" />, label: "Dashboard", path: "/dashboard" },
     { icon: <Home className="h-5 w-5" />, label: "Obras", path: "/obras" },
     { icon: <FileText className="h-5 w-5" />, label: "Relatórios", path: "/relatorios" },
     { icon: <Calculator className="h-5 w-5" />, label: "Simulação", path: "/simulacao" },
     { icon: <DollarSign className="h-5 w-5" />, label: "Financeiro", path: "/financeiro" },
     { icon: <Wallet className="h-5 w-5" />, label: "Custo Fixo", path: "/custo-fixo" },
-    { icon: <Users className="h-5 w-5" />, label: "Usuários", path: "/usuarios" },
+    { icon: <Users className="h-5 w-5" />, label: "Usuários", path: "/usuarios", adminOnly: true },
     { icon: <Settings className="h-5 w-5" />, label: "Configurações", path: "/configuracoes" },
   ]
+
+  // Filtrar itens do menu baseado nas permissões
+  const menuItems = allMenuItems.filter((item) => {
+    if (item.adminOnly) {
+      return isAdmin
+    }
+    return true
+  })
 
   const handleNavigation = (e: React.MouseEvent<HTMLAnchorElement>, path: string) => {
     e.preventDefault()

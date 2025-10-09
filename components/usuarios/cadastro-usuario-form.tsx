@@ -57,6 +57,8 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
   const [formErrors, setFormErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [cargos, setCargos] = useState<{ id: number; nome: string }[]>([])
+  const [isLoadingCargos, setIsLoadingCargos] = useState(true)
 
   // Função para formatar o CPF (000.000.000-00)
   const formatCPF = (value: string) => {
@@ -116,10 +118,34 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
     setCustoTotal(formatCurrency(String(total * 100)))
   }
 
+  // Carregar cargos ao montar o componente
+  useEffect(() => {
+    carregarCargos()
+  }, [])
+
   // Atualizar o custo total quando os valores financeiros mudarem
   useEffect(() => {
     calcularCustoTotal()
   }, [salario, beneficios, encargos])
+
+  // Função para carregar cargos da API
+  const carregarCargos = async () => {
+    try {
+      setIsLoadingCargos(true)
+      const response = await fetch("/api/cargos")
+      const result = await response.json()
+
+      if (result.success) {
+        setCargos(result.data)
+      } else {
+        console.error("Erro ao carregar cargos:", result.message)
+      }
+    } catch (error) {
+      console.error("Erro ao carregar cargos:", error)
+    } finally {
+      setIsLoadingCargos(false)
+    }
+  }
 
   // Função para validar o formulário
   const validateForm = () => {
@@ -352,21 +378,31 @@ export function CadastroUsuarioForm({ usuario, onClose, isEditing = false, onSav
                         setFormErrors({ ...formErrors, cargo: undefined })
                       }
                     }}
+                    disabled={isLoadingCargos}
                   >
                     <SelectTrigger
                       className={formErrors.cargo ? "border-red-500 focus:ring-red-500" : ""}
                       aria-invalid={!!formErrors.cargo}
                       aria-describedby={formErrors.cargo ? "cargo-error" : undefined}
                     >
-                      <SelectValue placeholder="Selecione o cargo" />
+                      <SelectValue placeholder={isLoadingCargos ? "Carregando cargos..." : "Selecione o cargo"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Engenheiro Civil">Engenheiro Civil</SelectItem>
-                      <SelectItem value="Gerente de Projetos">Gerente de Projetos</SelectItem>
-                      <SelectItem value="Técnico de Obras">Técnico de Obras</SelectItem>
-                      <SelectItem value="Analista Financeiro">Analista Financeiro</SelectItem>
-                      <SelectItem value="Supervisor de Obras">Supervisor de Obras</SelectItem>
-                      <SelectItem value="Assistente Administrativo">Assistente Administrativo</SelectItem>
+                      {isLoadingCargos ? (
+                        <SelectItem value="loading" disabled>
+                          Carregando...
+                        </SelectItem>
+                      ) : cargos.length === 0 ? (
+                        <SelectItem value="empty" disabled>
+                          Nenhum cargo disponível
+                        </SelectItem>
+                      ) : (
+                        cargos.map((cargoItem) => (
+                          <SelectItem key={cargoItem.id} value={cargoItem.nome}>
+                            {cargoItem.nome}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   {formErrors.cargo && (
