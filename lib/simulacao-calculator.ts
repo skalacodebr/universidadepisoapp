@@ -414,12 +414,18 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   // Multiplicar pelo total da área da obra
   const despesasFixasEmpresa = custoFixoPorM2 * areaTotal;
 
+  // Buscar o valor da diária por pessoa configurado pelo usuário
+  const valorPorPessoaPorDia = custosFixos?.valor_pessoa_dia ?
+    Number(custosFixos.valor_pessoa_dia) :
+    1373.47;
+
   console.log("🏭 === CÁLCULO DO CUSTO FIXO ===", {
     despesasFixasEmpresaTotal: `R$ ${despesasFixasEmpresaTotal.toFixed(2)}`,
     producaoMensal: `${producaoMensal} m²`,
     custoFixoPorM2: `R$ ${custoFixoPorM2.toFixed(2)}/m²`,
     areaTotal: `${areaTotal} m²`,
     despesasFixasEmpresa: `R$ ${despesasFixasEmpresa.toFixed(2)}`,
+    valorPorPessoaPorDia: `R$ ${valorPorPessoaPorDia.toFixed(2)}/dia`,
     formula: `${custoFixoPorM2.toFixed(2)} × ${areaTotal} = ${despesasFixasEmpresa.toFixed(2)}`
   });
 
@@ -475,7 +481,6 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const pessoasPreparacao = getEquipeQtd(formData.equipePreparacao, 'preparacao');
   const pessoasFinalizacao = pessoasAcabamento; // geralmente igual acabamento
 
-  const valorPorPessoaPorDia = 1373.47;
   const valorHoraExtra = 184.69;
 
   const diasConcretagem = Math.max(0, parseInt(formData.prazoConcretagem) || prazoTotal);
