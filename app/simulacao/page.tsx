@@ -56,8 +56,8 @@ function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalN
     custoVeiculos: obra.custo_veiculos
   });
   
-  // Calcular o custo de preparação
-  const custoPreparacao = obra.pessoasPreparacao * 1373.47 * (obra.prazo_preparacao_obra || 0);
+  // Calcular o custo de preparação (usar valor salvo no banco ou valor padrão)
+  const custoPreparacao = obra.custo_preparacao || (obra.pessoasPreparacao * 1373.47 * (obra.prazo_preparacao_obra || 0));
   
   return {
     dadosTecnicos: {
@@ -76,7 +76,11 @@ function adaptToDetailedFormat(oldResult: any, obra: any, tipoReforcoEstruturalN
       sobreposicaoCA: obra.sobreposicao_ca || 0,
       concreto: oldResult.volumeConcretoM3 || 0,
       finalConcretagem: obra.final_concretagem || '11:00',
-      preparoDiaSeguinte: Math.max(0, 19 - 17) // Calcula baseado no final do acabamento (19h) - 17h
+      preparoDiaSeguinte: (() => {
+        const finalConcretagem = obra.final_concretagem || '17:00';
+        const [hora] = finalConcretagem.split(':').map(Number);
+        return Math.max(0, 17 - hora);
+      })()
     },
     equipeConcretagemAcabamento: {
       equipeTotal: 8, // 5 concretagem + 3 acabamento
@@ -497,13 +501,18 @@ export default function SimulacaoPage() {
         const valorMaximo = faixa.split('-')[1]
         faturamentoMaximo = parseFloat(valorMaximo) || 360000
         
-        // Encontrar a alíquota correspondente
+        // Encontrar a alíquota correspondente - usar a mesma lógica corrigida
         if (simplesData && simplesData.length > 0) {
-          const bracket = simplesData.find(s => parseFloat(s.faturamento_ate) === faturamentoMaximo)
+          // CORREÇÃO: Buscar onde o faturamento máximo está DENTRO da faixa (faturamento_de <= valor <= faturamento_ate)
+          const faturamentoFormatado = faturamentoMaximo.toFixed(2)
+          const bracket = simplesData.find(s => 
+            parseFloat(s.faturamento_de) <= faturamentoMaximo && 
+            parseFloat(s.faturamento_ate) >= faturamentoMaximo
+          )
           if (bracket) {
             aliquotaSimples = bracket.aliquota
           } else {
-            // Se não encontrar exato, pegar por aproximação
+            // Se não encontrar, pegar por aproximação
             const bracketAprox = simplesData.find(s => parseFloat(s.faturamento_ate) >= faturamentoMaximo)
             if (bracketAprox) {
               aliquotaSimples = bracketAprox.aliquota
@@ -521,8 +530,16 @@ export default function SimulacaoPage() {
       // Buscar o número de pessoas da equipe de preparação
       const pessoasPreparacao = obra.equipe_preparacao || 0
 
-      // Buscar custo da mão de obra
-      const custoPorPessoa = 1373.47;
+      // Buscar o valor da diária por pessoa configurado pelo usuário
+      const custoPorPessoa = custosFixosEmpresa?.valor_pessoa_dia ?
+        Number(custosFixosEmpresa.valor_pessoa_dia) :
+        1373.47;
+
+      console.log("💰 === VALOR DA DIÁRIA POR PESSOA ===", {
+        valor_pessoa_dia_banco: custosFixosEmpresa?.valor_pessoa_dia,
+        custoPorPessoa_usado: custoPorPessoa,
+        custosFixosEmpresa: custosFixosEmpresa
+      });
       const prazoObra = obra.prazo_obra || 0;
       const prazoPreparacao = obra.prazo_preparacao_obra || 0;
       const prazoFinalizacao = obra.prazo_finalizacao_obra || 0;
@@ -598,13 +615,8 @@ export default function SimulacaoPage() {
         }
       }
 
-      // Usar custo de equipamentos já calculado se disponível
-      const custoEquipamentos = obra.custo_equipamentos || equipamentosSelecionados.reduce((total: number, equip: any) => {
-        const valorDia = parseFloat(equip.valor_dia) || 0;
-        const quantidade = parseInt(equip.quantidade) || 0;
-        const dias = prazoObra || 0;
-        return total + (valorDia * quantidade * dias);
-      }, 0);
+      // Usar custo de equipamentos já calculado e salvo no banco
+      const custoEquipamentos = obra.custo_equipamentos || 0;
 
       console.log("Custos de equipamentos:", {
         equipamentosSelecionados,
@@ -650,9 +662,17 @@ export default function SimulacaoPage() {
       const custoTotalObra = obra.custo_total_obra || (custoExecucao + despesasFixasEmpresa);
       const custoExecucaoCorreto = custoExecucao;
 
-      // Calcular valor total e lucro
-      const valorTotal = (obra.preco_venda_metro_quadrado || 0) * (obra.area_total_metros_quadrados || 0)
-      const lucroTotal = valorTotal - custoExecucaoCorreto
+      // Usar valores já calculados e salvos no banco
+      const valorTotal = obra.valor_total || 0
+      const lucroTotal = obra.lucro_total || 0
+
+      console.log("💰 === CÁLCULO CUSTO + LUCRO ===", {
+        valorTotal,
+        custoTotalObra,
+        lucroTotal,
+        soma: custoTotalObra + lucroTotal,
+        diferenca: valorTotal - (custoTotalObra + lucroTotal)
+      });
       
 
       // Buscar nome do tipo de acabamento
@@ -719,7 +739,11 @@ export default function SimulacaoPage() {
           sobreposicaoCA: obra.sobreposicao_ca || 0,
           concreto: (obra.area_total_metros_quadrados || 0) * ((obra.espessura_piso || 0) / 100),
           finalConcretagem: obra.final_concretagem || "",
-          preparoDiaSeguinte: Math.max(0, 19 - 17) // Calcula baseado no final do acabamento (19h) - 17h
+          preparoDiaSeguinte: (() => {
+        const finalConcretagem = obra.final_concretagem || '17:00';
+        const [hora] = finalConcretagem.split(':').map(Number);
+        return Math.max(0, 17 - hora);
+      })()
         },
         equipeConcretagemAcabamento: {
           equipeTotal: equipeConcretagemQtd + equipeAcabamentoQtd,
@@ -794,7 +818,7 @@ export default function SimulacaoPage() {
           area: obra.area_total_metros_quadrados || 0,
           dias: obra.prazo_obra || 0,
           valorPorM2: valorInsumosPorM2,
-          totalInsumos: obra.custo_insumos || (valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0)),
+          totalInsumos: obra.custo_insumos || 0,
           percentualTotalInsumos: valorTotal > 0 ? ((obra.custo_insumos || 0) / valorTotal) * 100 : 0
         },
         demaisDespesasFixas: {
@@ -813,11 +837,11 @@ export default function SimulacaoPage() {
         custoDerivadosVenda: {
           faturamento12Meses: faturamentoMaximo,
           percentualFaturamento: 100,
-          impostoSimples: (obra.valor_total || 0) * (aliquotaSimples / 100),
-          percentualImpostoSimples: aliquotaSimples,
+          impostoSimples: obra.imposto_simples || 0, // Usar valor salvo no banco
+          percentualImpostoSimples: obra.percentual_imposto_simples || 0, // Usar valor salvo no banco
           margemLucro: obra.lucro_total || 0,
           percentualMargemLucro: obra.percentual_lucro_desejado || 25,
-          comissoes: (obra.valor_total || 0) * ((obra.percentual_comissao || 0) / 100),
+          comissoes: (obra.valor_total || 0) * ((obra.percentual_comissao || 0) / 100), // Calcular comissões
           percentualComissoes: obra.percentual_comissao || 0
         },
         outrosCustos: {
@@ -836,7 +860,7 @@ export default function SimulacaoPage() {
           const resultado1 = temPrecoManual ? (obra.lucro_manual || 0) : (obra.lucro_total || 0);
           const resultadoPercentual = temPrecoManual ? 
             (obra.percentual_lucro_manual || 0) : 
-            ((obra.valor_total && obra.lucro_total) ? (obra.lucro_total / obra.valor_total) * 100 : 0);
+            (obra.percentual_lucro_desejado || 0); // Usar percentual desejado salvo no banco
           
           console.log("💾 === VALORES DAS NOVAS COLUNAS NO BANCO ===", {
             temPrecoManual,
@@ -852,14 +876,15 @@ export default function SimulacaoPage() {
           return {
             precoVendaPorM2: obra.preco_venda_metro_quadrado_calculo || 0,
             sePrecoVendaPorM2For: obra.preco_venda_metro_quadrado || 0,
-            valorTotal: obra.valor_total || 0,
+            valorTotal: obra.valor_total || 0, // Usar valor já calculado e salvo no banco
             resultado1: resultado1,
             resultadoPercentual: resultadoPercentual
           };
         })(),
-        valorTotal: obra.valor_total || 0, // Usar valor total do banco
+        valorTotal: valorTotal, // Usar valor já calculado e salvo no banco
         precoVendaM2: obra.preco_venda_metro_quadrado_calculo || obra.preco_venda_metro_quadrado || 0,
-        lucroTotal: obra.lucro_total || 0, // Usar lucro total do banco
+        lucroTotal: lucroTotal, // Usar lucro já calculado e salvo no banco
+        custoTotalObra: custoTotalObra, // Usar custo total calculado
         custoEquipamentos: obra.custo_equipamentos || 0, // Usar valor do banco
         custoVeiculos: obra.custo_veiculos || 0, // Usar valor do banco
         diasTotais: obra.prazo_obra || 0,

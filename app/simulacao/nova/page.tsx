@@ -19,6 +19,24 @@ import { useEffect } from "react"
 import type { SimulacaoFormData } from "@/lib/simulacao-calculator"
 import { processarSimulacao, salvarSimulacao } from "@/lib/simulacao-calculator"
 
+// Funções de formatação de valores monetários
+const formatarValorMonetario = (valor: string): string => {
+  // Remove tudo que não é número
+  const apenasNumeros = valor.replace(/\D/g, '')
+  
+  // Se estiver vazio, retorna vazio
+  if (apenasNumeros === '') return ''
+  
+  // Converte para número e formata
+  const numero = parseInt(apenasNumeros, 10)
+  return numero.toLocaleString('pt-BR')
+}
+
+const removerFormatacaoMonetaria = (valor: string): string => {
+  // Remove pontos e espaços, mantém apenas números
+  return valor.replace(/\D/g, '')
+}
+
 // Tipos para componentes
 interface VeiculoSelecionado { 
   id: number; 
@@ -114,6 +132,7 @@ export default function NovaSimulacaoPage() {
 
   const [activeTab, setActiveTab] = useState("informacoes-gerais")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [areaValidationError, setAreaValidationError] = useState("")
 
   // Estados para dados do banco
   const [equipesConcretagem, setEquipesConcretagem] = useState<EquipeConcretagem[]>([])
@@ -136,6 +155,28 @@ export default function NovaSimulacaoPage() {
         !isNaN(Number(formData.areaTotal)) && !isNaN(Number(formData.areaPorDia))) {
       const prazo = String(Math.ceil(Number(formData.areaTotal) / Number(formData.areaPorDia)));
       setFormData(prev => ({ ...prev, prazoObra: prazo }));
+    }
+  }, [formData.areaTotal, formData.areaPorDia]);
+
+  // Validar área por dia em tempo real
+  useEffect(() => {
+    if (formData.areaTotal !== "" && formData.areaPorDia !== "") {
+      const areaTotal = parseFloat(formData.areaTotal)
+      const areaPorDia = parseFloat(formData.areaPorDia)
+      
+      if (!isNaN(areaTotal) && !isNaN(areaPorDia)) {
+        if (areaTotal <= 0 || areaPorDia <= 0) {
+          setAreaValidationError("Área Total e Área por Dia devem ser valores positivos.")
+        } else if (areaPorDia > areaTotal) {
+          setAreaValidationError("A área por dia não pode ser maior que a área total da obra.")
+        } else {
+          setAreaValidationError("")
+        }
+      } else {
+        setAreaValidationError("")
+      }
+    } else {
+      setAreaValidationError("")
     }
   }, [formData.areaTotal, formData.areaPorDia]);
 
@@ -653,6 +694,12 @@ export default function NovaSimulacaoPage() {
     })
   }
 
+  // Função específica para campos monetários
+  const handleChangeMonetario = (field: string, valorFormatado: string) => {
+    const valorNumerico = removerFormatacaoMonetaria(valorFormatado)
+    handleChange(field, valorNumerico)
+  }
+
   const handleEquipamentoChange = (equipamentoId: number, checked: boolean) => {
     setFormData((prev) => ({
       ...prev,
@@ -749,6 +796,27 @@ export default function NovaSimulacaoPage() {
       // Validar dados obrigatórios
       if (!formData.nomeObra || !formData.areaTotal || !formData.areaPorDia) {
         alert("Por favor, preencha todos os campos obrigatórios: Nome da Obra, Área Total e Área por Dia")
+        return
+      }
+
+      // Validar se área por dia não é maior que área total
+      const areaTotal = parseFloat(formData.areaTotal)
+      const areaPorDia = parseFloat(formData.areaPorDia)
+      
+      // Verificar se os valores são números válidos
+      if (isNaN(areaTotal) || isNaN(areaPorDia)) {
+        alert("Erro: Área Total e Área por Dia devem ser números válidos.")
+        return
+      }
+      
+      // Verificar se os valores são positivos
+      if (areaTotal <= 0 || areaPorDia <= 0) {
+        alert("Erro: Área Total e Área por Dia devem ser valores positivos.")
+        return
+      }
+      
+      if (areaPorDia > areaTotal) {
+        alert("Erro: A área por dia não pode ser maior que a área total da obra.")
         return
       }
 
@@ -982,7 +1050,11 @@ export default function NovaSimulacaoPage() {
                   onChange={(e) => handleChange("areaPorDia", e.target.value)}
                   placeholder="Digite a área diária em m²"
                   required
+                  className={areaValidationError ? "border-red-500" : ""}
                 />
+                {areaValidationError && (
+                  <p className="text-sm text-red-600">{areaValidationError}</p>
+                )}
               </div>
 
               {/* ─── Previsão de Início ─── */}
@@ -1421,63 +1493,70 @@ export default function NovaSimulacaoPage() {
                 <Label htmlFor="frete">Frete (R$)</Label>
                 <Input
                   id="frete"
-                  type="number"
-                  value={formData.frete}
-                  onChange={(e) => handleChange("frete", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.frete)}
+                  onChange={(e) => handleChangeMonetario("frete", e.target.value)}
+                  placeholder="Ex: 2.500"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="hospedagem">Hospedagem (R$)</Label>
                 <Input
                   id="hospedagem"
-                  type="number"
-                  value={formData.hospedagem}
-                  onChange={(e) => handleChange("hospedagem", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.hospedagem)}
+                  onChange={(e) => handleChangeMonetario("hospedagem", e.target.value)}
+                  placeholder="Ex: 1.800"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="locacaoEquipamento">Locação de Equipamento (R$)</Label>
                 <Input
                   id="locacaoEquipamento"
-                  type="number"
-                  value={formData.locacaoEquipamento}
-                  onChange={(e) => handleChange("locacaoEquipamento", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.locacaoEquipamento)}
+                  onChange={(e) => handleChangeMonetario("locacaoEquipamento", e.target.value)}
+                  placeholder="Ex: 3.200"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="locacaoVeiculo">Locação de Veículo (R$)</Label>
                 <Input
                   id="locacaoVeiculo"
-                  type="number"
-                  value={formData.locacaoVeiculo}
-                  onChange={(e) => handleChange("locacaoVeiculo", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.locacaoVeiculo)}
+                  onChange={(e) => handleChangeMonetario("locacaoVeiculo", e.target.value)}
+                  placeholder="Ex: 1.500"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="material">Material (R$)</Label>
                 <Input
                   id="material"
-                  type="number"
-                  value={formData.material}
-                  onChange={(e) => handleChange("material", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.material)}
+                  onChange={(e) => handleChangeMonetario("material", e.target.value)}
+                  placeholder="Ex: 5.000"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="passagem">Passagem (R$)</Label>
                 <Input
                   id="passagem"
-                  type="number"
-                  value={formData.passagem}
-                  onChange={(e) => handleChange("passagem", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.passagem)}
+                  onChange={(e) => handleChangeMonetario("passagem", e.target.value)}
+                  placeholder="Ex: 800"
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="extra">Extra (R$)</Label>
                 <Input
                   id="extra"
-                  type="number"
-                  value={formData.extra}
-                  onChange={(e) => handleChange("extra", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.extra)}
+                  onChange={(e) => handleChangeMonetario("extra", e.target.value)}
+                  placeholder="Ex: 1.200"
                 />
               </div>
 
@@ -1498,9 +1577,10 @@ export default function NovaSimulacaoPage() {
                 <Label htmlFor="precoVenda">Se o preço de venda por M² for:</Label>
                 <Input
                   id="precoVenda"
-                  type="number"
-                  value={formData.precoVenda}
-                  onChange={(e) => handleChange("precoVenda", e.target.value)}
+                  type="text"
+                  value={formatarValorMonetario(formData.precoVenda)}
+                  onChange={(e) => handleChangeMonetario("precoVenda", e.target.value)}
+                  placeholder="Ex: 85"
                 />
               </div>
               <div className="space-y-2">

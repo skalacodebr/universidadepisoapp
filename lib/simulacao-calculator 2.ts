@@ -306,17 +306,14 @@ async function calcularAliquotaSimples(userId: string): Promise<{ faturamentoMax
     })
     
     // Buscar a alíquota correspondente na tabela simples_brackets
-    // CORREÇÃO: Buscar onde o faturamento máximo está DENTRO da faixa (faturamento_de <= valor <= faturamento_ate)
     const faturamentoFormatado = faturamentoMaximo.toFixed(2)
     
     console.log("🔍 Buscando alíquota para faturamento formatado:", faturamentoFormatado)
     
-    // Buscar a faixa onde o faturamento máximo se encaixa
     const { data: bracket, error: errorBracket } = await supabase
       .from('simples_brackets')
       .select('aliquota')
-      .lte('faturamento_de', faturamentoFormatado)
-      .gte('faturamento_ate', faturamentoFormatado)
+      .eq('faturamento_ate', faturamentoFormatado)
       .single()
     
     if (errorBracket || !bracket) {
@@ -417,18 +414,12 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   // Multiplicar pelo total da área da obra
   const despesasFixasEmpresa = custoFixoPorM2 * areaTotal;
 
-  // Buscar o valor da diária por pessoa configurado pelo usuário
-  const valorPorPessoaPorDia = custosFixos?.valor_pessoa_dia ?
-    Number(custosFixos.valor_pessoa_dia) :
-    1373.47;
-
   console.log("🏭 === CÁLCULO DO CUSTO FIXO ===", {
     despesasFixasEmpresaTotal: `R$ ${despesasFixasEmpresaTotal.toFixed(2)}`,
     producaoMensal: `${producaoMensal} m²`,
     custoFixoPorM2: `R$ ${custoFixoPorM2.toFixed(2)}/m²`,
     areaTotal: `${areaTotal} m²`,
     despesasFixasEmpresa: `R$ ${despesasFixasEmpresa.toFixed(2)}`,
-    valorPorPessoaPorDia: `R$ ${valorPorPessoaPorDia.toFixed(2)}/dia`,
     formula: `${custoFixoPorM2.toFixed(2)} × ${areaTotal} = ${despesasFixasEmpresa.toFixed(2)}`
   });
 
@@ -448,15 +439,14 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const inicioAcabamento = addHoursToTime(inicioConcretagem, 5);
   const areaConcretaPorHora = espessura > 0 ? lancamentoConcreto / espessura : 0;
   const horasConcretagem = areaConcretaPorHora > 0 ? Math.ceil(areaPorDia / areaConcretaPorHora) : 0;
-  
+  const [horaInicioAcabamento] = inicioAcabamento.split(':').map(Number);
+  const horasAcabamento = Math.max(0, 19 - horaInicioAcabamento);
   const finalConcretagem = addHoursToTime(inicioConcretagem, horasConcretagem);
-  const finalAcabamento = addHoursToTime(finalConcretagem, 6); // Final concretagem + 6 horas
-  const horasAcabamento = 6; // Sempre 6 horas de acabamento (fixo)
+  const finalAcabamento = '19:00';
   const sobreposicaoCA = calcularSobreposicaoCA(inicioConcretagem, horasConcretagem, inicioAcabamento);
   const concreto = areaTotal * espessura;
   
-  // Preparo dia seguinte = 17:00 - final da concretagem (se der negativo, zerar)
-  // Se terminar antes das 17h, há tempo para preparo. Se terminar depois, não há tempo.
+  // Preparo dia seguinte = 17:00 - hora final da concretagem
   const [horaFinalConcretagemPreparo] = finalConcretagem.split(':').map(Number);
   const preparoDiaSeguinte = Math.max(0, 17 - horaFinalConcretagemPreparo);
 
@@ -485,6 +475,10 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const pessoasPreparacao = getEquipeQtd(formData.equipePreparacao, 'preparacao');
   const pessoasFinalizacao = pessoasAcabamento; // geralmente igual acabamento
 
+  const valorPorPessoaPorDia = 1373.47;
+  const valorHoraExtraDiaria = 184.69; // diária padrão para hora extra por pessoa
+  const valorHoraExtra = valorHoraExtraDiaria / 8; // converte para valor/hora aplicado nas HE
+
   const diasConcretagem = Math.max(0, parseInt(formData.prazoConcretagem) || prazoTotal);
   const diasAcabamento = Math.max(0, parseInt(formData.prazoAcabamento) || prazoTotal);
   const diasPreparacao = Math.max(0, parseInt(formData.prazoPreparacao) || 0);
@@ -496,28 +490,13 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const custoFinalizacao = pessoasFinalizacao * valorPorPessoaPorDia * diasFinalizacao;
 
   // Horas extras por dia (apenas após as 17h)
-  // Cálculo da hora extra: (diária ÷ 8) × 1,5
-  // Hora extra = 150% do valor da hora normal
   function getHora(horaMinutoStr: string) {
     return parseInt(horaMinutoStr.split(':')[0], 10);
   }
   const horaFinalConcretagem = getHora(finalConcretagem);
   const horaFinalAcabamento = getHora(finalAcabamento);
   const horasExtraConcretagem = Math.max(0, horaFinalConcretagem - 17);
-  
-  // Horas extras de acabamento = final do acabamento - 17:00
-  // Se o acabamento passar das 24h (dia seguinte), somar 24h para calcular corretamente
-  let horaFinalAcabamentoParaCalculo = horaFinalAcabamento;
-  if (horaFinalAcabamento < 17) {
-    // Se terminou antes das 17h, significa que passou para o dia seguinte
-    // Exemplo: 02:00 = 24 + 2 = 26 horas
-    horaFinalAcabamentoParaCalculo = 24 + horaFinalAcabamento;
-  }
-  const horasExtraAcabamento = Math.max(0, horaFinalAcabamentoParaCalculo - 17);
-
-  // Calcular valor da hora extra (diária ÷ 8 × 1,5)
-  const valorHoraNormal = valorPorPessoaPorDia / 8;
-  const valorHoraExtra = valorHoraNormal * 1.5;
+  const horasExtraAcabamento = Math.max(0, horaFinalAcabamento - 17);
 
   const custoHorasExtraConcretagem = horasExtraConcretagem * valorHoraExtra * pessoasConcretagem * prazoTotal;
   const custoHorasExtraAcabamento = horasExtraAcabamento * valorHoraExtra * pessoasAcabamento * prazoTotal;
@@ -541,18 +520,10 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     custoFinalizacao: `R$ ${custoFinalizacao.toFixed(2)} (${pessoasFinalizacao} × ${valorPorPessoaPorDia} × ${diasFinalizacao})`,
     horasExtraConcretagem: horasExtraConcretagem,
     horasExtraAcabamento: horasExtraAcabamento,
-    valorHoraNormal: `R$ ${valorHoraNormal.toFixed(2)}/hora (diária ÷ 8)`,
-    valorHoraExtra: `R$ ${valorHoraExtra.toFixed(2)}/hora (hora normal × 1.5)`,
-    calculoHoraExtra: `(${valorPorPessoaPorDia.toFixed(2)} ÷ 8) × 1.5 = ${valorHoraExtra.toFixed(2)}`,
-    custoHorasExtraConcretagem: `R$ ${custoHorasExtraConcretagem.toFixed(2)} (${horasExtraConcretagem}h × ${valorHoraExtra.toFixed(2)} × ${pessoasConcretagem} × ${prazoTotal})`,
-    custoHorasExtraAcabamento: `R$ ${custoHorasExtraAcabamento.toFixed(2)} (${horasExtraAcabamento}h × ${valorHoraExtra.toFixed(2)} × ${pessoasAcabamento} × ${prazoTotal})`,
-    finalAcabamentoCalculado: finalAcabamento,
-    horaFinalAcabamento: horaFinalAcabamento,
-    horaFinalAcabamentoParaCalculo: horaFinalAcabamentoParaCalculo,
-    logicaHorasExtras: `Final acabamento (${horaFinalAcabamentoParaCalculo}h) - 17h = ${horasExtraAcabamento}h extras`,
-    explicacaoCalculo: horaFinalAcabamento < 17 ? 
-      `Acabamento às ${horaFinalAcabamento}:00 (dia seguinte) = 24 + ${horaFinalAcabamento} = ${horaFinalAcabamentoParaCalculo}h` :
-      `Acabamento às ${horaFinalAcabamento}:00 (mesmo dia) = ${horaFinalAcabamento}h`,
+    valorHoraExtraDiaria: `R$ ${valorHoraExtraDiaria.toFixed(2)}/dia`,
+    valorHoraExtraPorHora: `R$ ${valorHoraExtra.toFixed(2)}/hora`,
+    custoHorasExtraConcretagem: `R$ ${custoHorasExtraConcretagem.toFixed(2)}`,
+    custoHorasExtraAcabamento: `R$ ${custoHorasExtraAcabamento.toFixed(2)}`,
     custoTotalHorasExtras: `R$ ${custoTotalHorasExtras.toFixed(2)}`,
     custoTotalMaoObra: `R$ ${custoTotalMaoObra.toFixed(2)}`,
     formula: `${custoConcretagem} + ${custoAcabamento} + ${custoPreparacao} + ${custoFinalizacao} + ${custoTotalHorasExtras} = ${custoTotalMaoObra}`
@@ -592,10 +563,8 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     // Proteção: se equipamentosData for null, trata como array vazio
     const equipamentoInfo = (equipamentosData ?? []).find((e: any) => e.id === eq.id);
     if (!equipamentoInfo) return null;
-    const dias_obra = prazoTotal; // Apenas o prazo da obra, sem preparação/finalização
+    const dias_obra = prazoTotal + diasPreparacao + diasFinalizacao;
     const custo_total = equipamentoInfo.valor_dia * eq.quantidade * dias_obra;
-    
-    
     return {
       id: eq.id,
       nome: eq.nome,
@@ -607,6 +576,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     };
   })
   .filter((eq): eq is EquipamentoComCusto => eq !== null); // Garante tipagem final correta
+
 
   const totalEquipamentos = equipamentosComCusto.reduce((acc, eq) => acc + eq.custo_total, 0);
   const equipamentos: Equipamentos = {
@@ -787,9 +757,15 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const lucroDesejado = parseFloat(formData.lucroDesejado) || 0;
   const comissaoPercentual = parseFloat(formData.comissao) || 0;
   
-  // FÓRMULA CORRETA: Preço = Custo Total ÷ {1 - (l/100) - (c/100) - (i/100)}
-  const divisor = 1 - (lucroDesejado/100) - (comissaoPercentual/100) - (aliquota/100);
-  const precoVendaCalculado = divisor > 0 ? custoTotalGeral / divisor : custoTotalGeral;
+  // Primeiro calcular o preço de venda baseado APENAS no custo e lucro desejado
+  // SEM influência do preço manual digitado
+  const lucroSobreCusto = custoTotalGeral * (lucroDesejado / 100);
+  
+  const percentualImpostosEComissoes = (aliquota + comissaoPercentual) / 100;
+  const divisor = 1 - percentualImpostosEComissoes;
+  
+  const custoTotalComLucro = custoTotalGeral + lucroSobreCusto;
+  const precoVendaCalculado = divisor > 0 ? custoTotalComLucro / divisor : custoTotalComLucro;
   const precoVendaFinalPorM2 = areaTotal > 0 ? precoVendaCalculado / areaTotal : 0;
   
   // Agora calcular os valores baseados no preço calculado (não no manual!)
@@ -856,13 +832,16 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   
   console.log("📈 === CÁLCULO DO PREÇO DE VENDA ===", {
     custoTotal: `R$ ${custoTotalGeral.toFixed(2)}`,
-    lucroDesejado: `${lucroDesejado}%`,
+    lucroSobreCusto: `R$ ${lucroSobreCusto.toFixed(2)}`,
+    custoTotalComLucro: `R$ ${custoTotalComLucro.toFixed(2)}`,
     comissaoPercentual: `${comissaoPercentual}%`,
-    aliquotaPercentual: `${aliquota}%`,
+    aliquotaPercentual: `${aliquota}%`, 
+    lucroDesejado: `${lucroDesejado}%`,
+    percentualImpostosEComissoes: `${(percentualImpostosEComissoes * 100).toFixed(2)}%`,
     divisor: divisor.toFixed(4),
     precoVendaCalculado: `R$ ${precoVendaCalculado.toFixed(2)}`,
     precoVendaPorM2: `R$ ${precoVendaFinalPorM2.toFixed(2)}/m²`,
-    formula: `${custoTotalGeral.toFixed(2)} ÷ {1 - (${lucroDesejado}/100) - (${comissaoPercentual}/100) - (${aliquota}/100)} = ${precoVendaCalculado.toFixed(2)}`
+    formula: `(${custoTotalGeral.toFixed(2)} + ${lucroSobreCusto.toFixed(2)}) / (1 - ${percentualImpostosEComissoes.toFixed(4)}) = ${precoVendaCalculado.toFixed(2)}`
   });
   
   // Usar valores já calculados acima
@@ -885,12 +864,11 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     'precoVendaFinalPorM2 (calculado)': precoVendaFinalPorM2
   });
   
-  // FÓRMULA CORRETA: Lucro = (PVF × A) - (PVF × A × I/100) - (PVF × A × C/100) - CT
-  const impostoManual = precoVendaTotalManual * (aliquota / 100);
-  const comissaoManual = precoVendaTotalManual * (comissaoPercentual / 100);
-  const margemLucroManual = precoVendaTotalManual - impostoManual - comissaoManual - custoTotalGeral;
+  // CORREÇÃO: Usar EXATAMENTE o mesmo método que a esquerda
+  // Lucro bruto = preço total - custos totais (SEM descontar impostos)
+  const margemLucroManual = precoVendaTotalManual - custoTotalGeral;
   
-  // Calcular percentual sobre o PREÇO
+  // CORREÇÃO: Calcular percentual sobre o PREÇO (igual à esquerda), não sobre o custo
   let percentualLucroManual = precoVendaTotalManual > 0 ? (margemLucroManual / precoVendaTotalManual) * 100 : 0;
   // Se o percentual for menor que -200%, limitar para -200% para melhor legibilidade
   if (percentualLucroManual < -200) {
@@ -899,18 +877,10 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
 
   console.log("🔄 === CORREÇÃO DO CÁLCULO MANUAL ===", {
     precoVendaTotalManual: `R$ ${precoVendaTotalManual.toFixed(2)}`,
-    impostoManual: `R$ ${impostoManual.toFixed(2)} (${aliquota}%)`,
-    comissaoManual: `R$ ${comissaoManual.toFixed(2)} (${comissaoPercentual}%)`,
     custoTotalGeral: `R$ ${custoTotalGeral.toFixed(2)}`,
     margemLucroManual: `R$ ${margemLucroManual.toFixed(2)}`,
     percentualLucroManual: `${percentualLucroManual.toFixed(2)}%`,
-    formula: `${precoVendaTotalManual.toFixed(2)} - ${impostoManual.toFixed(2)} - ${comissaoManual.toFixed(2)} - ${custoTotalGeral.toFixed(2)} = ${margemLucroManual.toFixed(2)}`,
-    // DEBUG: Comparar com o calculado
-    precoVendaCalculado: `R$ ${precoVendaCalculado.toFixed(2)}`,
-    lucroCalculado: `R$ ${(precoVendaCalculado - custoTotalGeral).toFixed(2)}`,
-    percentualLucroCalculado: `${((precoVendaCalculado - custoTotalGeral) / precoVendaCalculado * 100).toFixed(2)}%`,
-    diferencaPreco: precoVendaCalculado - precoVendaTotalManual,
-    diferencaLucro: (precoVendaCalculado - custoTotalGeral) - margemLucroManual
+    formula: `${precoVendaTotalManual.toFixed(2)} - ${custoTotalGeral.toFixed(2)} = ${margemLucroManual.toFixed(2)} (sem descontar impostos)`
   });
 
   console.log('=== DEBUG PREÇO INFORMADO ===', {
@@ -1048,7 +1018,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
     },
     outrosCustos,
     precoVenda,
-    valorTotal: precoVendaCalculado, // Sempre usar o preço calculado, não o manual
+    valorTotal: resultado1,
     precoVendaM2: precoVendaFinalPorM2,
     lucroTotal: margemLucroCalculada,
     custoEquipamentos: totalEquipamentos,
@@ -1164,10 +1134,6 @@ export async function salvarSimulacao(
       percentual_lucro_desejado: parseFloat(formData.lucroDesejado),
       valor_total: resultado.valorTotal,
       lucro_total: resultado.lucroTotal,
-      // Salvar valores de impostos e comissões (apenas colunas que existem)
-      imposto_simples: resultado.custoDerivadosVenda?.impostoSimples || 0,
-      percentual_imposto_simples: resultado.custoDerivadosVenda?.percentualImpostoSimples || 0,
-      percentual_comissao: resultado.custoDerivadosVenda?.percentualComissoes || 0,
       // Salvar valores manuais nas novas colunas
       lucro_manual: resultado.precoVenda.resultado1, // Lucro calculado com preço manual
       percentual_lucro_manual: resultado.precoVenda.resultadoPercentual, // Percentual calculado com preço manual
@@ -1181,9 +1147,7 @@ export async function salvarSimulacao(
           veiculosSelecionados: formData.veiculosSelecionados,
           tipo: typeof formData.veiculosSelecionados,
           ehArray: Array.isArray(formData.veiculosSelecionados),
-          tamanho: formData.veiculosSelecionados?.length || 0,
-          primeiroVeiculo: formData.veiculosSelecionados?.[0],
-          todosVeiculosComRsKm: formData.veiculosSelecionados?.every(v => v.rs_km !== undefined)
+          tamanho: formData.veiculosSelecionados?.length || 0
         });
         return formData.veiculosSelecionados;
       })(),

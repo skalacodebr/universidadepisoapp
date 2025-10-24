@@ -99,8 +99,8 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
   const demaisDespesasFixas = data.demaisDespesasFixas || {}
   const custoDerivadosVenda = data.custoDerivadosVenda || {}
 
-  // Calcular o custo total da obra corretamente
-  const custoTotalObra = (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0)
+  // Usar o custo total da obra diretamente do banco de dados
+  const custoTotalObra = data.custoTotalObra || (demaisDespesasFixas.custoExecucao || 0) + (demaisDespesasFixas.despesasFixas || 0)
   const outrosCustos = data.outrosCustos || {}
   const precoVenda = data.precoVenda || {}
   const finalizacaoObra = data.finalizacaoObra || {}
@@ -239,6 +239,13 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
             <div>
               <p className="font-medium">Horas Extras Acabamento:</p>
               <p className="text-gray-600">{equipeConcretagemAcabamento.horaExtraEquipeAcabamento}h ({formatarMoeda(equipeConcretagemAcabamento.custoHEAcabamento)})</p>
+            </div>
+            <div>
+              <p className="font-medium">Horas Extras Total:</p>
+              <p className="text-gray-600">
+                {equipeConcretagemAcabamento.horasExtraEquipeConcretagem + equipeConcretagemAcabamento.horaExtraEquipeAcabamento}h 
+                ({formatarMoeda(equipeConcretagemAcabamento.custoHEEquipeConcretagem + equipeConcretagemAcabamento.custoHEAcabamento)})
+              </p>
             </div>
           </div>
           <Separator className="my-4" />
@@ -585,7 +592,7 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
                 <div className="flex justify-between">
                   <span className="font-bold text-lg">
                     {formatarMoeda(custoTotalObra)} +
-                    {formatarMoeda(custoDerivadosVenda.margemLucro || 0)}
+                    {formatarMoeda(data.lucroTotal || 0)}
                   </span>
                 </div>
                 <div className="flex justify-between">
