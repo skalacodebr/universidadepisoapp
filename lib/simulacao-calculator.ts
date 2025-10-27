@@ -433,12 +433,13 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   });
 
   // Helpers
-  const getEquipeQtd = (id: string, tipo: 'concretagem' | 'acabamento' | 'preparacao') => {
+  const getEquipeQtd = (id: string, tipo: 'concretagem' | 'acabamento' | 'preparacao' | 'finalizacao') => {
     if (!id) return 0;
     const equipes = {
       'concretagem': equipesConcretagem,
       'acabamento': equipesAcabamento,
-      'preparacao': equipesPreparacao
+      'preparacao': equipesPreparacao,
+      'finalizacao': equipesAcabamento // Finalização usa a mesma tabela de acabamento
     };
     return equipes[tipo]?.find(e => e.id === parseInt(id))?.qtd_pessoas || 0;
   };
@@ -483,7 +484,7 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   const pessoasConcretagem = getEquipeQtd(formData.equipeConcretagem, 'concretagem');
   const pessoasAcabamento = getEquipeQtd(formData.equipeAcabamento, 'acabamento');
   const pessoasPreparacao = getEquipeQtd(formData.equipePreparacao, 'preparacao');
-  const pessoasFinalizacao = pessoasAcabamento; // geralmente igual acabamento
+  const pessoasFinalizacao = getEquipeQtd(formData.equipeFinalizacao, 'finalizacao');
 
   const diasConcretagem = Math.max(0, parseInt(formData.prazoConcretagem) || prazoTotal);
   const diasAcabamento = Math.max(0, parseInt(formData.prazoAcabamento) || prazoTotal);
@@ -509,9 +510,13 @@ export async function processarSimulacao(formData: SimulacaoFormData, userId: st
   // Se o acabamento passar das 24h (dia seguinte), somar 24h para calcular corretamente
   let horaFinalAcabamentoParaCalculo = horaFinalAcabamento;
   if (horaFinalAcabamento < 17) {
-    // Se terminou antes das 17h, significa que passou para o dia seguinte
-    // Exemplo: 02:00 = 24 + 2 = 26 horas
-    horaFinalAcabamentoParaCalculo = 24 + horaFinalAcabamento;
+    // Se terminou antes das 17h, significa que NÃO passou para o dia seguinte
+    // Exemplo: 16:00 = 16 horas (mesmo dia, sem horas extras)
+    horaFinalAcabamentoParaCalculo = horaFinalAcabamento;
+  } else if (horaFinalAcabamento > 24) {
+    // Se a hora for maior que 24, significa que passou para o dia seguinte
+    // Exemplo: 26:00 = 26 horas (dia seguinte)
+    horaFinalAcabamentoParaCalculo = horaFinalAcabamento;
   }
   const horasExtraAcabamento = Math.max(0, horaFinalAcabamentoParaCalculo - 17);
 

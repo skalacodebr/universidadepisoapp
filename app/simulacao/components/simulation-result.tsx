@@ -567,66 +567,188 @@ export function SimulationResult({ data, onVoltar }: SimulationResultProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Preço de venda por m²:</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Coluna Esquerda - Preço Calculado */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-center text-blue-700 mb-4">Preço Calculado</h3>
+              
+              {/* Lucro Desejado */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Lucro Desejado:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-blue-600">
+                      {formatarMoeda(custoDerivadosVenda.margemLucro || 0)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(custoDerivadosVenda.percentualMargemLucro || 0)})
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-lg text-blue-600">{formatarMoeda(precoVenda.precoVendaPorM2)}/m²</span>
+              </div>
+
+              {/* Preço de Venda por m² */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Preço de Venda por m²:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-green-600">
+                      {formatarMoeda(precoVenda.precoVendaPorM2)}/m²
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Lucro %:</span>
+              </div>
+
+              {/* Imposto */}
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Imposto:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-red-600">
+                      {formatarMoeda(custoDerivadosVenda.impostoSimples || 0)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(custoDerivadosVenda.percentualImpostoSimples || 0)})
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-lg text-green-600">{formatarPercentual(custoDerivadosVenda.percentualMargemLucro || 0)}</span>
+              </div>
+
+              {/* Comissão */}
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Comissão:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-yellow-600">
+                      {formatarMoeda(custoDerivadosVenda.comissoes || 0)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(custoDerivadosVenda.percentualComissoes || 0)})
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custo Total da Obra */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Custo Total da Obra:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-gray-700">
+                      {formatarMoeda(custoTotalObra)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(100)})
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Valor Total */}
+              <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-300">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-lg">Valor Total:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-2xl text-purple-700">
+                      {formatarMoeda(data.valorTotal || 0)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Custo + Lucro:</span>
+
+            {/* Coluna Direita - Preço Manual */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-center text-orange-700 mb-4">Se o Preço de Venda For</h3>
+              
+              {/* Preço Manual por m² */}
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Preço de Venda por m²:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-orange-600">
+                      {formatarMoeda(precoVenda.sePrecoVendaPorM2For)}/m²
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-lg">
-                    {formatarMoeda(custoTotalObra)} +
-                    {formatarMoeda(data.lucroTotal || 0)}
-                  </span>
+              </div>
+
+              {/* Lucro Manual */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Lucro:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-blue-600">
+                      {formatarMoeda(precoVenda.resultado1 || 0)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({(() => {
+                        const percentual = precoVenda.resultadoPercentual || 0;
+                        return percentual <= -200 ? `< -200%` : formatarPercentual(percentual);
+                      })()})
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Total:</span>
+              </div>
+
+              {/* Imposto Manual */}
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Imposto:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-red-600">
+                      {formatarMoeda((precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal) * ((custoDerivadosVenda.percentualImpostoSimples || 0) / 100))}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(custoDerivadosVenda.percentualImpostoSimples || 0)})
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-lg text-blue-600">
-                    {formatarMoeda(data.valorTotal || 0)}
-                  </span>
+              </div>
+
+              {/* Comissão Manual */}
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Comissão:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-yellow-600">
+                      {formatarMoeda((precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal) * ((custoDerivadosVenda.percentualComissoes || 0) / 100))}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(custoDerivadosVenda.percentualComissoes || 0)})
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custo Total da Obra (igual) */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Custo Total da Obra:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-lg text-gray-700">
+                      {formatarMoeda(custoTotalObra)}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      ({formatarPercentual(100)})
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Valor Total Manual */}
+              <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-300">
+                <div className="flex justify-between items-center">
+                  <span className="font-bold text-lg">Valor Total:</span>
+                  <div className="text-right">
+                    <div className="font-bold text-2xl text-purple-700">
+                      {formatarMoeda(precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Se o preço de venda por m² for {formatarMoeda(precoVenda.sePrecoVendaPorM2For)}:</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-lg text-orange-600">{formatarMoeda(precoVenda.sePrecoVendaPorM2For * dadosTecnicos.areaTotal)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Resultado:</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-bold text-lg text-green-600">
-                    {formatarMoeda(precoVenda.resultado1)} ({(() => {
-                      const percentual = precoVenda.resultadoPercentual || 0;
-                      return percentual <= -200 ? `< -200%` : formatarPercentual(percentual);
-                    })()})
-                  </span>
-                </div>
-              </div>
-            </div>
-      </div>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -416,10 +416,6 @@ export default function SimulacaoPage() {
     window.location.href = `/simulacao/nova?refazer=${id}`
   }
 
-  const handleAjustarPreco = async (id: number) => {
-    console.log("Ajustando preço da simulação", id)
-    window.location.href = `/simulacao/ajustar-preco?id=${id}`
-  }
 
   const handleDuplicate = async (id: number) => {
     await duplicarSimulacao(id)
@@ -705,6 +701,20 @@ export default function SimulacaoPage() {
         }
       }
 
+      // Buscar nome do tipo de reforço estrutural
+      let tipoReforcoEstruturalNome = 'N/A';
+      if (obra.tipo_reforco_estrutural_id) {
+        const { data: reforcoData, error: reforcoError } = await supabase
+          .from('tipo_reforco_estrutural')
+          .select('nome')
+          .eq('id', obra.tipo_reforco_estrutural_id)
+          .single();
+        
+        if (!reforcoError && reforcoData) {
+          tipoReforcoEstruturalNome = reforcoData.nome;
+        }
+      }
+
       console.log("Tipo de acabamento encontrado:", tipoAcabamentoData);
       console.log("Valor dos insumos por m²:", { tipoAcabamento: tipoAcabamentoData?.nome, valorPorM2: valorInsumosPorM2 });
       const custoTotalInsumos = valorInsumosPorM2 * (obra.area_total_metros_quadrados || 0)
@@ -724,7 +734,7 @@ export default function SimulacaoPage() {
       // Montar resultado da simulação
       const resultado: SimulacaoResultType = {
         dadosTecnicos: {
-          reforcoEstrutural: obra.tipo_reforco_estrutural_id?.toString() || "",
+          reforcoEstrutural: tipoReforcoEstruturalNome,
           areaTotal: obra.area_total_metros_quadrados || 0,
           areaPorDia: obra.area_por_dia || 0,
           prazoTotal: obra.prazo_obra || 0,
@@ -981,7 +991,6 @@ export default function SimulacaoPage() {
             onDelete={handleDelete}
             onViewSimulation={handleViewSimulation}
             onRefazer={handleRefazer}
-            onAjustarPreco={handleAjustarPreco}
             onNovaSimulacao={() => {}}
             onClearFilters={clearFilters}
             hasFilters={hasFilters}
